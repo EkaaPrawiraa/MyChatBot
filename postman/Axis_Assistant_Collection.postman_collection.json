@@ -1,0 +1,839 @@
+{
+  "info": {
+    "_postman_id": "f0a1b2c3-d4e5-6789-0abc-def123456789",
+    "name": "Axis Assistant API",
+    "description": "Full API collection for the Axis Assistant platform.\n\n**Auth:** All endpoints (except /health) require the `X-API-Key` header.\n\n**Response envelope:**\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"error\": null,\n  \"meta\": { \"request_id\": \"...\", \"timestamp\": \"...\" }\n}\n```\n\n**Error codes follow the grammar:** `<service>.<category>`\n- `backend.*` — Go backend errors\n- `agent.*` — Python agent errors\n- `external.*` — third-party errors\n\n**New in v2:** Voice transcription (Whisper), AI model selection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key", "type": "string" },
+      { "key": "value", "value": "{{api_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "No auth required. Returns `{\"status\": \"ok\"}` if the backend is running."
+          },
+          "response": []
+        },
+        {
+          "name": "Agent Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agent_url}}/health",
+              "host": ["{{agent_url}}"],
+              "path": ["health"]
+            },
+            "description": "No auth required. Returns `{\"status\": \"ok\"}` from the Python agent."
+          },
+          "response": []
+        }
+      ],
+      "description": "Health check endpoints for both services."
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Send Message",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure session_id is set",
+                  "if (!pm.environment.get('session_id')) {",
+                  "    console.warn('⚠️ session_id is empty. Create a session first.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"message\": \"What's on my calendar today?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "chat"]
+            },
+            "description": "Send a message to the AI agent.\n\n**Requires** an active `session_id` — create one via Sessions > Create Session first.\n\nThe Go backend proxies this to the Python agent's `/orchestrate` endpoint. The response includes the AI reply, detected intent, tools used, and latency."
+          },
+          "response": []
+        }
+      ],
+      "description": "Chat endpoints — the main conversational interface."
+    },
+    {
+      "name": "Voice (Whisper)",
+      "item": [
+        {
+          "name": "Transcribe Audio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Audio file (wav, mp3, m4a, flac, ogg, webm, mp4, mpeg, mpga, oga)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/voice",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "voice"]
+            },
+            "description": "Upload an audio file for speech-to-text transcription using OpenAI Whisper.\n\n**Supported formats:** flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm\n\n**Max file size:** 25 MB\n\n**Requires:** `OPENAI_API_KEY` to be configured (Whisper always uses OpenAI, regardless of the chat provider).\n\nThe response contains the transcribed text. You can then send the transcription as a chat message via `POST /api/v1/chat`."
+          },
+          "response": []
+        },
+        {
+          "name": "Transcribe Audio (Agent Direct)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Audio file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{agent_url}}/voice",
+              "host": ["{{agent_url}}"],
+              "path": ["voice"]
+            },
+            "description": "Call the agent's Whisper endpoint directly (bypassing Go backend).\n\nUseful for debugging."
+          },
+          "response": []
+        }
+      ],
+      "description": "Voice-to-text transcription using OpenAI Whisper API.\n\nUpload audio → get transcribed text → send to chat."
+    },
+    {
+      "name": "AI Models",
+      "item": [
+        {
+          "name": "List Available Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/models",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "models"]
+            },
+            "description": "List all supported AI providers and their available models.\n\nReturns a map of provider → model names. Use these values when updating your profile to switch providers/models.\n\n**Providers:** `openai`, `anthropic`, `xai`"
+          },
+          "response": []
+        },
+        {
+          "name": "List Available Models (Agent Direct)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{agent_url}}/models",
+              "host": ["{{agent_url}}"],
+              "path": ["models"]
+            },
+            "description": "Call the agent's models endpoint directly."
+          },
+          "response": []
+        }
+      ],
+      "description": "AI model discovery — see all available providers and models.\n\nUse with Profile > Update Profile to switch your AI engine."
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            },
+            "description": "Fetch the owner's profile.\n\nThe `ai_api_key` is **never** returned in plaintext — only a masked version (`ai_api_key_masked`) is included."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Eka\",\n  \"email\": \"eka@example.com\",\n  \"preferred_meeting_hours\": \"09:00-12:00\",\n  \"focus_hours\": \"14:00-17:00\",\n  \"communication_style\": \"concise\",\n  \"work_pattern\": \"morning person\",\n  \"ai_provider\": \"openai\",\n  \"ai_api_key\": \"sk-proj-...\",\n  \"ai_model\": \"gpt-4o-mini\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            },
+            "description": "Update the owner's profile. All fields are optional (PATCH-like behavior).\n\n**AI Provider values:** `openai`, `anthropic`, `xai`\n\nThe `ai_api_key` is stored securely and masked in GET responses."
+          },
+          "response": []
+        },
+        {
+          "name": "Update AI Provider (Anthropic)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ai_provider\": \"anthropic\",\n  \"ai_api_key\": \"sk-ant-...\",\n  \"ai_model\": \"claude-sonnet-4-20250514\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            },
+            "description": "Example: switch to Anthropic Claude."
+          },
+          "response": []
+        },
+        {
+          "name": "Update AI Provider (xAI/Grok)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ai_provider\": \"xai\",\n  \"ai_api_key\": \"xai-...\",\n  \"ai_model\": \"grok-3\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            },
+            "description": "Example: switch to xAI Grok."
+          },
+          "response": []
+        }
+      ],
+      "description": "Owner profile management. Single owner — always `id = 1`.\n\nSupports switching AI providers (OpenAI, Anthropic, xAI)."
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "Create Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.success && json.data && json.data.id) {",
+                  "    pm.environment.set('session_id', json.data.id);",
+                  "    console.log('✅ session_id saved: ' + json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions"]
+            },
+            "description": "Create a new chat session. No request body needed.\n\nThe returned `id` is automatically saved to the `session_id` environment variable for use in subsequent requests."
+          },
+          "response": []
+        },
+        {
+          "name": "List Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max sessions to return (default: 20)"
+                }
+              ]
+            },
+            "description": "List recent chat sessions, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}"]
+            },
+            "description": "Fetch a single session by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Close Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/close",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "close"]
+            },
+            "description": "Mark a session as inactive (closed). Returns `204 No Content`."
+          },
+          "response": []
+        }
+      ],
+      "description": "Chat session lifecycle — create, list, get, close."
+    },
+    {
+      "name": "Activities",
+      "item": [
+        {
+          "name": "List Activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/activities?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "activities"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max results (default: 20)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                }
+              ]
+            },
+            "description": "List agent execution traces / activity logs.\n\nEach log includes: user query, detected intent, execution plan, tools used, success/failure, latency, and token usage."
+          },
+          "response": []
+        }
+      ],
+      "description": "Agent execution traces / observability."
+    },
+    {
+      "name": "Reminders",
+      "item": [
+        {
+          "name": "Create Reminder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.success && json.data && json.data.id) {",
+                  "    pm.environment.set('reminder_id', json.data.id);",
+                  "    console.log('✅ reminder_id saved: ' + json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Team standup\",\n  \"description\": \"Daily standup meeting at 10 AM\",\n  \"scheduled_at\": \"2026-02-21T10:00:00Z\",\n  \"sent_via\": \"email\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reminders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reminders"]
+            },
+            "description": "Create a scheduled reminder.\n\n`scheduled_at` must be RFC3339 format.\n`sent_via` is optional (email, whatsapp, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Upcoming Reminders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reminders?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reminders"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max reminders (default: 20)"
+                }
+              ]
+            },
+            "description": "List upcoming (not yet sent) reminders."
+          },
+          "response": []
+        }
+      ],
+      "description": "Reminder management — create and list scheduled reminders."
+    },
+    {
+      "name": "Approvals",
+      "item": [
+        {
+          "name": "Get Pending Approvals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/approvals",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "approvals"]
+            },
+            "description": "List all pending approval items.\n\nApprovals are created by the agent when a plan has `requires_approval = true` (e.g., sending emails, creating events)."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Plan",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feedback\": \"Looks good, proceed.\",\n  \"modified_plan\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/approvals/{{approval_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "approvals", "{{approval_id}}", "approve"]
+            },
+            "description": "Approve a pending plan. Optionally provide `feedback` or a `modified_plan` (JSON bytes)."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Plan",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feedback\": \"Too aggressive, tone it down.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/approvals/{{approval_id}}/reject",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "approvals", "{{approval_id}}", "reject"]
+            },
+            "description": "Reject a pending plan with feedback."
+          },
+          "response": []
+        }
+      ],
+      "description": "Human-in-the-loop approval flow for risky operations."
+    },
+    {
+      "name": "Memory",
+      "item": [
+        {
+          "name": "Search Long-Term Memory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/search?q=meeting preferences&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "meeting preferences",
+                  "description": "Search query (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Max results (default: 10)"
+                }
+              ]
+            },
+            "description": "Search long-term vector memory by semantic similarity.\n\nRequires `q` parameter."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Memories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/recent?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "recent"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max results (default: 20)"
+                }
+              ]
+            },
+            "description": "Get recent long-term memory entries, newest first."
+          },
+          "response": []
+        }
+      ],
+      "description": "Long-term memory search and retrieval (dashboard-facing)."
+    },
+    {
+      "name": "Automations",
+      "item": [
+        {
+          "name": "Create Automation Rule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.success && json.data && json.data.id) {",
+                  "    pm.environment.set('automation_id', json.data.id);",
+                  "    console.log('✅ automation_id saved: ' + json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Auto-reply job emails\",\n  \"trigger_type\": \"email_received\",\n  \"condition_json\": {\"subject_contains\": \"job offer\"},\n  \"action_json\": {\"reply\": \"Thank you, I'll review this.\"},\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/automations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "automations"]
+            },
+            "description": "Create a trigger-based automation rule.\n\n`trigger_type` examples: `email_received`, `time_based`, `calendar_event`\n`condition_json` and `action_json` are freeform JSON."
+          },
+          "response": []
+        },
+        {
+          "name": "List Automation Rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/automations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "automations"]
+            },
+            "description": "List all automation rules."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Automation Rule",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Auto-reply job emails (updated)\",\n  \"enabled\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/automations/{{automation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "automations", "{{automation_id}}"]
+            },
+            "description": "Update an automation rule. All fields are optional (PATCH-like)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Automation Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/automations/{{automation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "automations", "{{automation_id}}"]
+            },
+            "description": "Delete an automation rule. Returns `204 No Content`."
+          },
+          "response": []
+        }
+      ],
+      "description": "Automation rules — trigger-based workflows."
+    },
+    {
+      "name": "Internal (Agent → Backend)",
+      "item": [
+        {
+          "name": "Get Profile (Internal)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "profile"]
+            },
+            "description": "Used by the Python agent to load the owner profile during context loading.\n\nReturns the full profile including AI provider/model (but NOT the raw API key)."
+          },
+          "response": []
+        },
+        {
+          "name": "Store Short-Term Memory",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{$guid}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"role\": \"user\",\n  \"message\": \"What's on my calendar today?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/memory/short-term",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "memory", "short-term"]
+            },
+            "description": "Store a conversation message (short-term memory).\n\nUsed by the agent's memory_update node after each exchange.\n\n`role`: `user`, `assistant`, or `system`"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation (Short-Term)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/memory/short-term/{{session_id}}?limit=50",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "memory",
+                "short-term",
+                "{{session_id}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Max messages (default: 50)"
+                }
+              ]
+            },
+            "description": "Fetch recent conversation for a session (short-term memory).\n\nUsed by the agent's load_context node."
+          },
+          "response": []
+        },
+        {
+          "name": "Store Long-Term Memory",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{$guid}}\",\n  \"content\": \"User prefers morning meetings between 9-11 AM\",\n  \"category\": \"user_preference\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/memory/long-term",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "memory", "long-term"]
+            },
+            "description": "Store a long-term memory entry with vector embedding.\n\nUsed by the agent for MEMORY_WRITE intents."
+          },
+          "response": []
+        },
+        {
+          "name": "Vector Search (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"meeting preferences\",\n  \"limit\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/memory/search",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "memory", "search"]
+            },
+            "description": "Semantic vector search over long-term memory.\n\nUsed by the agent's load_context node to find relevant past knowledge."
+          },
+          "response": []
+        },
+        {
+          "name": "Log Activity (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_query\": \"What's on my calendar?\",\n  \"intent\": \"QUERY_ONLY\",\n  \"execution_plan\": {\"steps\": []},\n  \"tools_used\": [\"calendar.list\"],\n  \"success\": true,\n  \"latency_ms\": 1250,\n  \"token_usage\": 350\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/activity",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "activity"]
+            },
+            "description": "Log an agent execution trace.\n\nUsed by the agent to record what happened during each interaction."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Approval (Internal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.success && json.data && json.data.id) {",
+                  "    pm.environment.set('approval_id', json.data.id);",
+                  "    console.log('✅ approval_id saved: ' + json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"proposed_plan\": {\"steps\": [{\"tool\": \"gmail.send\", \"input\": {\"to\": \"boss@company.com\", \"subject\": \"Report\", \"body\": \"Attached.\"}}]}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/approval",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "approval"]
+            },
+            "description": "Create an approval request from the agent.\n\nUsed when a plan has `requires_approval = true`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Approval by ID (Internal)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/approval/{{approval_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "approval", "{{approval_id}}"]
+            },
+            "description": "Fetch an approval item by ID.\n\nUsed by the agent to check approval status."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Reminder (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Follow up with client\",\n  \"description\": \"Check if they received the proposal\",\n  \"scheduled_at\": \"2026-02-22T09:00:00Z\",\n  \"sent_via\": \"whatsapp\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/reminder",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "reminder"]
+            },
+            "description": "Create a reminder from the agent.\n\nUsed when the agent detects the user wants a reminder set."
+          },
+          "response": []
+        }
+      ],
+      "description": "**Internal endpoints** — used by the Python agent to communicate with the Go backend.\n\nThese are under `/api/v1/internal/*` and are NOT meant for direct frontend use, but you can test them here."
+    },
+    {
+      "name": "Agent Direct",
+      "item": [
+        {
+          "name": "Orchestrate (Direct)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"message\": \"Send an email to my boss about the quarterly report\"\n}"
+            },
+            "url": {
+              "raw": "{{agent_url}}/orchestrate",
+              "host": ["{{agent_url}}"],
+              "path": ["orchestrate"]
+            },
+            "description": "Call the Python agent directly (bypassing the Go backend).\n\nUseful for debugging the agent in isolation.\n\n**Note:** In production, always go through the Go backend via `POST /api/v1/chat`."
+          },
+          "response": []
+        }
+      ],
+      "description": "Direct calls to the Python agent — for debugging only."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+package configs
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/joho/godotenv"
+)
+
+// Config holds all application configuration.
+type Config struct {
+	App    AppConfig
+	DB     DBConfig
+	AI     AIConfig
+	Google GoogleConfig
+}
+
+type AppConfig struct {
+	Name   string
+	Port   string
+	Env    string
+	APIKey string // single-owner API key for dashboard & agent auth
+}
+
+type DBConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Name     string
+	SSLMode  string
+}
+
+func (d DBConfig) DSN() string {
+	return fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		d.Host, d.Port, d.User, d.Password, d.Name, d.SSLMode,
+	)
+}
+
+type AIConfig struct {
+	OrchestratorURL string
+}
+
+type GoogleConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+}
+
+// Load reads .env and populates Config.
+func Load() (*Config, error) {
+	_ = godotenv.Load()
+
+	cfg := &Config{
+		App: AppConfig{
+			Name:   env("APP_NAME", "axis-assistant"),
+			Port:   env("APP_PORT", "8080"),
+			Env:    env("APP_ENV", "development"),
+			APIKey: env("API_KEY", ""),
+		},
+		DB: DBConfig{
+			Host:     env("DB_HOST", "localhost"),
+			Port:     env("DB_PORT", "5432"),
+			User:     env("DB_USER", "axis"),
+			Password: env("DB_PASSWORD", "axis_secret"),
+			Name:     env("DB_NAME", "axis_assistant"),
+			SSLMode:  env("DB_SSLMODE", "disable"),
+		},
+		AI: AIConfig{
+			OrchestratorURL: env("AI_ORCHESTRATOR_URL", "http://localhost:8000"),
+		},
+		Google: GoogleConfig{
+			ClientID:     env("GOOGLE_CLIENT_ID", ""),
+			ClientSecret: env("GOOGLE_CLIENT_SECRET", ""),
+			RedirectURL:  env("GOOGLE_REDIRECT_URL", ""),
+		},
+	}
+
+	if cfg.App.APIKey == "" {
+		return nil, fmt.Errorf("API_KEY must be set")
+	}
+
+	return cfg, nil
+}
+
+func env(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return fallback
+}

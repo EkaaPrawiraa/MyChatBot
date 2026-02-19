@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  # ---------- PostgreSQL ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: axis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: axis
+      POSTGRES_PASSWORD: axis_secret
+      POSTGRES_DB: axis_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axis -d axis_assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Redis (optional async queue) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: axis-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------- Go Backend ----------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: axis-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      APP_NAME: axis-assistant
+      APP_PORT: "8080"
+      APP_ENV: development
+      API_KEY: ${API_KEY:-change-me-to-a-strong-secret}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: axis
+      DB_PASSWORD: axis_secret
+      DB_NAME: axis_assistant
+      DB_SSLMODE: disable
+      AI_ORCHESTRATOR_URL: http://agent:8000
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------- Python AI Agent ----------
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: axis-agent
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      BACKEND_URL: http://backend:8080
+      API_KEY: ${API_KEY:-change-me-to-a-strong-secret}
+      HOST: "0.0.0.0"
+      PORT: "8000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
