@@ -10,6 +10,7 @@ import uuid
 
 from app.models.state import AxisState
 from app.services.backend_client import backend
+from app.services.long_term_memory import enqueue_long_term_memory_write
 
 
 async def memory_update(state: AxisState) -> dict:
@@ -39,15 +40,10 @@ async def memory_update(state: AxisState) -> dict:
         except Exception:
             pass
 
-    # --- Long-term: store if the intent was MEMORY_WRITE ---
-    if state.intent == "MEMORY_WRITE" and state.user_input:
-        try:
-            await backend.store_long_term({
-                "id": str(uuid.uuid4()),
-                "content": state.user_input,
-                "category": "user_note",
-            })
-        except Exception:
-            pass
+    # --- Long-term: interpret + store durable memories (best-effort, background) ---
+    try:
+        enqueue_long_term_memory_write(state)
+    except Exception:
+        pass
 
     return {}

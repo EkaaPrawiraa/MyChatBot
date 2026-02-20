@@ -14,12 +14,41 @@ type ProfileUsecase interface {
 	UpdateProfile(ctx context.Context, profile *OwnerProfile) error
 }
 
+// IntegrationsUsecase manages third-party credential configuration.
+type IntegrationsUsecase interface {
+	GetStatus(ctx context.Context) (*IntegrationsStatus, error)
+	DisconnectGoogle(ctx context.Context) error
+	UpsertWhatsApp(ctx context.Context, phoneNumberID, businessAccountID, apiToken string) error
+	DisconnectWhatsApp(ctx context.Context) error
+	// Google OAuth flow
+	GoogleAuthURL(state string) (string, error)
+	HandleGoogleCallback(ctx context.Context, code string) error
+}
+
+// ToolsUsecase exposes real tool operations used by the Python orchestrator.
+type ToolsUsecase interface {
+	GmailUnread(ctx context.Context, maxResults int) (int, error)
+	GmailSearch(ctx context.Context, query string, maxResults int) (any, error)
+	GmailCategorizedUnread(ctx context.Context, maxResults int) (any, error)
+	GmailSend(ctx context.Context, to, subject, body string) (any, error)
+	CalendarList(ctx context.Context, timeMin, timeMax string, maxResults int) (any, error)
+	CalendarCreate(ctx context.Context, payload map[string]any) (any, error)
+	CalendarUpdate(ctx context.Context, eventID string, payload map[string]any) (any, error)
+	CalendarDelete(ctx context.Context, eventID string) (any, error)
+	CalendarFreeBusy(ctx context.Context, timeMin, timeMax string) (any, error)
+	PeopleSearch(ctx context.Context, query string, pageSize int, pageToken string) (any, error)
+	DriveSearch(ctx context.Context, query string, pageSize int, pageToken string) (any, error)
+	YouTubeAnalytics(ctx context.Context, startDate string, endDate string) (any, error)
+	WhatsAppSend(ctx context.Context, to, message string) (any, error)
+}
+
 // SessionUsecase manages conversation sessions.
 type SessionUsecase interface {
-	Create(ctx context.Context) (*Session, error)
+	Create(ctx context.Context, title string) (*Session, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*Session, error)
 	List(ctx context.Context, limit int) ([]Session, error)
 	Close(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // ChatUsecase proxies messages through the AI orchestrator.

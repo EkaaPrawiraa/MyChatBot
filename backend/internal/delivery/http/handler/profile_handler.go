@@ -18,7 +18,9 @@ func NewProfileHandler(uc domain.ProfileUsecase) *ProfileHandler {
 // AIAPIKey is never exposed; we include a masked version instead.
 type profileResponse struct {
 	*domain.OwnerProfile
-	AIAPIKeyMasked string `json:"ai_api_key_masked"`
+	AIAPIKeyMasked string          `json:"ai_api_key_masked"`
+	AISkill        string          `json:"ai_skill"`
+	SidebarMenus   map[string]bool `json:"sidebar_menus"`
 }
 
 // Get handles GET /api/v1/profile
@@ -31,19 +33,23 @@ func (h *ProfileHandler) Get(c *gin.Context) {
 	response.OK(c, profileResponse{
 		OwnerProfile:   profile,
 		AIAPIKeyMasked: profile.AIKeyMasked(),
+		AISkill:        getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus:   getSidebarMenusFromPreferences(profile.Preferences),
 	})
 }
 
 type updateProfileRequest struct {
-	Name                  *string `json:"name"`
-	Email                 *string `json:"email"`
-	PreferredMeetingHours *string `json:"preferred_meeting_hours"`
-	FocusHours            *string `json:"focus_hours"`
-	CommunicationStyle    *string `json:"communication_style"`
-	WorkPattern           *string `json:"work_pattern"`
-	AIProvider            *string `json:"ai_provider"`
-	AIAPIKey              *string `json:"ai_api_key"`
-	AIModel               *string `json:"ai_model"`
+	Name                  *string         `json:"name"`
+	Email                 *string         `json:"email"`
+	PreferredMeetingHours *string         `json:"preferred_meeting_hours"`
+	FocusHours            *string         `json:"focus_hours"`
+	CommunicationStyle    *string         `json:"communication_style"`
+	WorkPattern           *string         `json:"work_pattern"`
+	AIProvider            *string         `json:"ai_provider"`
+	AIAPIKey              *string         `json:"ai_api_key"`
+	AIModel               *string         `json:"ai_model"`
+	AISkill               *string         `json:"ai_skill"`
+	SidebarMenus          map[string]bool `json:"sidebar_menus"`
 }
 
 // Update handles PUT /api/v1/profile
@@ -93,6 +99,49 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	if req.AIModel != nil {
 		profile.AIModel = *req.AIModel
 	}
+	if req.AISkill != nil {
+		valid := map[string]bool{"quick": true, "balanced": true, "deep": true}
+		if !valid[*req.AISkill] {
+			response.BadRequest(c, "ai_skill must be one of: quick, balanced, deep")
+			return
+		}
+		prefs, err := setAISkillInPreferences(profile.Preferences, *req.AISkill)
+		if err != nil {
+			response.BadRequest(c, "invalid preferences")
+			return
+		}
+		profile.Preferences = prefs
+	}
+	if req.SidebarMenus != nil {
+		// Sanitize: keep only known keys, and never allow hiding chat/settings.
+		allowed := map[string]bool{
+			"dashboard":   true,
+			"chat":        true,
+			"activities":  true,
+			"calendar":    true,
+			"planning":    true,
+			"memory":      true,
+			"approvals":   true,
+			"automations": true,
+			"email":       true,
+			"whatsapp":    true,
+			"settings":    true,
+		}
+		clean := map[string]bool{}
+		for k, v := range req.SidebarMenus {
+			if allowed[k] {
+				clean[k] = v
+			}
+		}
+		clean["chat"] = true
+		clean["settings"] = true
+		prefs, err := setSidebarMenusInPreferences(profile.Preferences, clean)
+		if err != nil {
+			response.BadRequest(c, "invalid preferences")
+			return
+		}
+		profile.Preferences = prefs
+	}
 
 	if err := h.uc.UpdateProfile(c.Request.Context(), profile); err != nil {
 		mapDomainError(c, err)
@@ -102,5 +151,7 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	response.OK(c, profileResponse{
 		OwnerProfile:   profile,
 		AIAPIKeyMasked: profile.AIKeyMasked(),
+		AISkill:        getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus:   getSidebarMenusFromPreferences(profile.Preferences),
 	})
 }

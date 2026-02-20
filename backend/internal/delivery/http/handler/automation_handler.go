@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
 	"github.com/EkaaPrawiraa/axis-assistant/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -17,8 +19,8 @@ func NewAutomationHandler(uc domain.AutomationUsecase) *AutomationHandler {
 type createAutomationRequest struct {
 	Name          string `json:"name" binding:"required"`
 	TriggerType   string `json:"trigger_type" binding:"required"`
-	ConditionJSON []byte `json:"condition_json"`
-	ActionJSON    []byte `json:"action_json"`
+	ConditionJSON json.RawMessage `json:"condition_json"`
+	ActionJSON    json.RawMessage `json:"action_json"`
 	Enabled       *bool  `json:"enabled"`
 }
 
@@ -63,8 +65,8 @@ func (h *AutomationHandler) List(c *gin.Context) {
 type updateAutomationRequest struct {
 	Name          *string `json:"name"`
 	TriggerType   *string `json:"trigger_type"`
-	ConditionJSON []byte  `json:"condition_json"`
-	ActionJSON    []byte  `json:"action_json"`
+	ConditionJSON json.RawMessage `json:"condition_json"`
+	ActionJSON    json.RawMessage `json:"action_json"`
 	Enabled       *bool   `json:"enabled"`
 }
 
@@ -88,10 +90,10 @@ func (h *AutomationHandler) Update(c *gin.Context) {
 	if req.TriggerType != nil {
 		rule.TriggerType = *req.TriggerType
 	}
-	if req.ConditionJSON != nil {
+	if len(req.ConditionJSON) > 0 {
 		rule.ConditionJSON = req.ConditionJSON
 	}
-	if req.ActionJSON != nil {
+	if len(req.ActionJSON) > 0 {
 		rule.ActionJSON = req.ActionJSON
 	}
 	if req.Enabled != nil {

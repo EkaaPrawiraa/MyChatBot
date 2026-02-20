@@ -2,8 +2,10 @@
 
 import React from "react";
 import { useActivities } from "@/src/hooks/use-activities";
-import { AppLayout } from "@/src/components/layout/app-layout";
-import { Sidebar } from "@/src/components/layout/sidebar";
+import { AppSidebar } from "@/src/components/layout/app-sidebar";
+import { SidebarHeaderToggle } from "@/src/components/layout/sidebar-header-toggle";
+import { Footer } from "@/src/components/layout/footer";
+import { ThemeToggle } from "@/src/components/layout/theme-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,14 +14,33 @@ import { Loader2, ChevronDown } from "lucide-react";
 
 export default function ActivitiesPage() {
   const [page, setPage] = React.useState(1);
+  const pageSize = 20;
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
-  const { data: activitiesData, isLoading } = useActivities({
+  const { data: activitiesPage = [], isLoading } = useActivities({
     page,
-    pageSize: 20,
+    pageSize,
   });
 
-  const activities = activitiesData?.activities || [];
-  const total = activitiesData?.total || 0;
+  const [activities, setActivities] = React.useState<typeof activitiesPage>([]);
+
+  React.useEffect(() => {
+    if (!activitiesPage) return;
+    if (page === 1) {
+      setActivities(activitiesPage);
+      return;
+    }
+
+    setActivities((prev) => {
+      const seen = new Set(prev.map((a) => a.id));
+      const next = [...prev];
+      for (const a of activitiesPage) {
+        if (!seen.has(a.id)) next.push(a);
+      }
+      return next;
+    });
+  }, [activitiesPage, page]);
+
+  const hasMore = activitiesPage.length === pageSize;
 
   const toggleExpanded = (id: string) => {
     const newSet = new Set(expandedIds);
@@ -31,28 +52,42 @@ export default function ActivitiesPage() {
     setExpandedIds(newSet);
   };
 
+  const formatExecutionPlan = (raw: string) => {
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      return raw;
+    }
+  };
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <div className="hidden lg:flex w-[280px] flex-col flex-shrink-0 border-r border-white/10">
-        <Sidebar />
-      </div>
+      <AppSidebar />
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Header */}
-        <div className="glass-dark border-b border-white/10 px-6 py-4">
-          <h1 className="text-2xl font-bold">Activities</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            View and manage recent assistant activities
-          </p>
+        <div className="bg-background border-b border-border px-6 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <SidebarHeaderToggle className="mt-0.5" />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold">Activities</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  View and manage recent assistant activities
+                </p>
+              </div>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin text-accent-glow-bright" />
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : activities.length === 0 ? (
             <div className="text-center text-muted-foreground py-20">
@@ -62,11 +97,11 @@ export default function ActivitiesPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4 max-w-4xl">
+            <div className="space-y-4 max-w-4xl mx-auto w-full">
               {activities.map((activity) => (
                 <Card
                   key={activity.id}
-                  className="glass-dark border-white/10 hover:border-white/20 transition-colors"
+                  className="glass-dark transition-colors hover:bg-accent/40"
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-4">
@@ -85,7 +120,7 @@ export default function ActivitiesPage() {
                           {activity.intent && (
                             <Badge
                               variant="outline"
-                              className="border-accent-glow-bright/30"
+                              className="border-primary/30"
                             >
                               {activity.intent}
                             </Badge>
@@ -106,7 +141,7 @@ export default function ActivitiesPage() {
                   </CardHeader>
 
                   {expandedIds.has(activity.id) && (
-                    <CardContent className="border-t border-white/10 pt-4">
+                    <CardContent className="border-t border-border pt-4">
                       {activity.tools && activity.tools.length > 0 && (
                         <div className="mb-4">
                           <p className="text-sm font-medium text-muted-foreground mb-2">
@@ -131,12 +166,8 @@ export default function ActivitiesPage() {
                           <p className="text-sm font-medium text-muted-foreground mb-2">
                             Execution Plan
                           </p>
-                          <pre className="bg-black/40 rounded p-3 text-xs overflow-x-auto text-foreground">
-                            {JSON.stringify(
-                              JSON.parse(activity.executionPlan),
-                              null,
-                              2,
-                            )}
+                          <pre className="bg-muted border border-border rounded p-3 text-xs overflow-x-auto text-foreground">
+                            {formatExecutionPlan(activity.executionPlan)}
                           </pre>
                         </div>
                       )}
@@ -151,7 +182,7 @@ export default function ActivitiesPage() {
                     </CardContent>
                   )}
 
-                  <div className="px-6 py-3 border-t border-white/10">
+                  <div className="px-6 py-3 border-t border-border">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -171,12 +202,12 @@ export default function ActivitiesPage() {
               ))}
 
               {/* Load More */}
-              {activities.length < total && (
+              {hasMore && (
                 <div className="flex justify-center pt-4">
                   <Button
                     variant="outline"
                     onClick={() => setPage(page + 1)}
-                    className="border-white/10 hover:bg-white/5"
+                    className="border-border hover:bg-accent"
                   >
                     Load More
                   </Button>
@@ -185,6 +216,8 @@ export default function ActivitiesPage() {
             </div>
           )}
         </div>
+
+        <Footer className="flex-shrink-0" />
       </div>
     </div>
   );

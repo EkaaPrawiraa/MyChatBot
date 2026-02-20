@@ -2,17 +2,10 @@
   "info": {
     "_postman_id": "f0a1b2c3-d4e5-6789-0abc-def123456789",
     "name": "Axis Assistant API",
-    "description": "Full API collection for the Axis Assistant platform.\n\n**Auth:** All endpoints (except /health) require the `X-API-Key` header.\n\n**Response envelope:**\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"error\": null,\n  \"meta\": { \"request_id\": \"...\", \"timestamp\": \"...\" }\n}\n```\n\n**Error codes follow the grammar:** `<service>.<category>`\n- `backend.*` — Go backend errors\n- `agent.*` — Python agent errors\n- `external.*` — third-party errors\n\n**New in v2:** Voice transcription (Whisper), AI model selection.",
+    "description": "Full API collection for the Axis Assistant platform.\n\n**Auth:**\n- Public backend endpoints under `/api/v1/*` do **not** require `X-API-Key` by default.\n- Internal backend endpoints under `/api/v1/internal/*` require a **service-to-service** key: `X-API-Key: {{service_api_key}}`.\n- Agent direct endpoints (calling the Python service directly) also require `X-API-Key: {{service_api_key}}`.\n\n**AI provider key:**\n- The user's provider key (e.g., OpenAI) is stored in the owner profile via `PUT /api/v1/profile` as `ai_api_key`.\n- It is masked in public `GET /api/v1/profile` responses.\n\n**Response envelope:**\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"error\": null,\n  \"meta\": { \"request_id\": \"...\", \"timestamp\": \"...\" }\n}\n```\n\n**Error codes follow the grammar:** `<service>.<category>`\n- `backend.*` — Go backend errors\n- `agent.*` — Python agent errors\n- `external.*` — third-party errors\n\n**New in v2:** Voice transcription (Whisper), AI model selection, session message history.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "auth": {
-    "type": "apikey",
-    "apikey": [
-      { "key": "key", "value": "X-API-Key", "type": "string" },
-      { "key": "value", "value": "{{api_key}}", "type": "string" },
-      { "key": "in", "value": "header", "type": "string" }
-    ]
-  },
+  "auth": { "type": "noauth" },
   "variable": [],
   "item": [
     {
@@ -113,7 +106,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "voice"]
             },
-            "description": "Upload an audio file for speech-to-text transcription using OpenAI Whisper.\n\n**Supported formats:** flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm\n\n**Max file size:** 25 MB\n\n**Requires:** `OPENAI_API_KEY` to be configured (Whisper always uses OpenAI, regardless of the chat provider).\n\nThe response contains the transcribed text. You can then send the transcription as a chat message via `POST /api/v1/chat`."
+            "description": "Upload an audio file for speech-to-text transcription using OpenAI Whisper.\n\n**Supported formats:** flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm\n\n**Max file size:** 25 MB\n\n**Requires:** your OpenAI key to be saved in the owner profile as `ai_api_key` (Settings page or `PUT /api/v1/profile`).\n\nThe response contains the transcribed text. You can then send the transcription as a chat message via `POST /api/v1/chat`."
           },
           "response": []
         },
@@ -121,7 +114,7 @@
           "name": "Transcribe Audio (Agent Direct)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "header": [{ "key": "X-API-Key", "value": "{{service_api_key}}" }],
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -166,7 +159,7 @@
           "name": "List Available Models (Agent Direct)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "header": [{ "key": "X-API-Key", "value": "{{service_api_key}}" }],
             "url": {
               "raw": "{{agent_url}}/models",
               "host": ["{{agent_url}}"],
@@ -203,7 +196,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Eka\",\n  \"email\": \"eka@example.com\",\n  \"preferred_meeting_hours\": \"09:00-12:00\",\n  \"focus_hours\": \"14:00-17:00\",\n  \"communication_style\": \"concise\",\n  \"work_pattern\": \"morning person\",\n  \"ai_provider\": \"openai\",\n  \"ai_api_key\": \"sk-proj-...\",\n  \"ai_model\": \"gpt-4o-mini\"\n}"
+              "raw": "{\n  \"name\": \"Eka\",\n  \"email\": \"eka@example.com\",\n  \"preferred_meeting_hours\": \"09:00-12:00\",\n  \"focus_hours\": \"14:00-17:00\",\n  \"communication_style\": \"concise\",\n  \"work_pattern\": \"morning person\",\n  \"ai_provider\": \"openai\",\n  \"ai_api_key\": \"{{ai_api_key}}\",\n  \"ai_model\": \"gpt-4o-mini\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/profile",
@@ -221,7 +214,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ai_provider\": \"anthropic\",\n  \"ai_api_key\": \"sk-ant-...\",\n  \"ai_model\": \"claude-sonnet-4-20250514\"\n}"
+              "raw": "{\n  \"ai_provider\": \"anthropic\",\n  \"ai_api_key\": \"{{ai_api_key}}\",\n  \"ai_model\": \"claude-sonnet-4-20250514\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/profile",
@@ -239,7 +232,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ai_provider\": \"xai\",\n  \"ai_api_key\": \"xai-...\",\n  \"ai_model\": \"grok-3\"\n}"
+              "raw": "{\n  \"ai_provider\": \"xai\",\n  \"ai_api_key\": \"{{ai_api_key}}\",\n  \"ai_model\": \"grok-3\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/profile",
@@ -263,11 +256,13 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var json = pm.response.json();",
-                  "if (json.success && json.data && json.data.id) {",
+                  "pm.test('Save session_id to environment', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.success && json.data && json.data.id) {",
                   "    pm.environment.set('session_id', json.data.id);",
                   "    console.log('✅ session_id saved: ' + json.data.id);",
-                  "}"
+                  "  }",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -317,6 +312,27 @@
               "path": ["api", "v1", "sessions", "{{session_id}}"]
             },
             "description": "Fetch a single session by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Messages (History)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/messages?limit=200",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "messages"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200",
+                  "description": "Max messages to return (default: 200)"
+                }
+              ]
+            },
+            "description": "Fetch the full short-term conversation history for a session (for ChatGPT-style UI rendering)."
           },
           "response": []
         },
@@ -379,11 +395,13 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var json = pm.response.json();",
-                  "if (json.success && json.data && json.data.id) {",
+                  "pm.test('Save reminder_id to environment', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.success && json.data && json.data.id) {",
                   "    pm.environment.set('reminder_id', json.data.id);",
                   "    console.log('✅ reminder_id saved: ' + json.data.id);",
-                  "}"
+                  "  }",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -548,11 +566,13 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var json = pm.response.json();",
-                  "if (json.success && json.data && json.data.id) {",
+                  "pm.test('Save automation_id to environment', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.success && json.data && json.data.id) {",
                   "    pm.environment.set('automation_id', json.data.id);",
                   "    console.log('✅ automation_id saved: ' + json.data.id);",
-                  "}"
+                  "  }",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -625,6 +645,14 @@
     },
     {
       "name": "Internal (Agent → Backend)",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          { "key": "key", "value": "X-API-Key", "type": "string" },
+          { "key": "value", "value": "{{service_api_key}}", "type": "string" },
+          { "key": "in", "value": "header", "type": "string" }
+        ]
+      },
       "item": [
         {
           "name": "Get Profile (Internal)",
@@ -636,7 +664,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "profile"]
             },
-            "description": "Used by the Python agent to load the owner profile during context loading.\n\nReturns the full profile including AI provider/model (but NOT the raw API key)."
+            "description": "Used by the Python agent to load the owner profile during context loading.\n\nReturns the full profile including AI provider/model and `ai_api_key` for provider calls. This endpoint is protected by the service-to-service API key."
           },
           "response": []
         },
@@ -747,11 +775,13 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var json = pm.response.json();",
-                  "if (json.success && json.data && json.data.id) {",
+                  "pm.test('Save approval_id to environment', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.success && json.data && json.data.id) {",
                   "    pm.environment.set('approval_id', json.data.id);",
                   "    console.log('✅ approval_id saved: ' + json.data.id);",
-                  "}"
+                  "  }",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -810,15 +840,20 @@
     },
     {
       "name": "Agent Direct",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          { "key": "key", "value": "X-API-Key", "type": "string" },
+          { "key": "value", "value": "{{service_api_key}}", "type": "string" },
+          { "key": "in", "value": "header", "type": "string" }
+        ]
+      },
       "item": [
         {
           "name": "Orchestrate (Direct)",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-API-Key", "value": "{{api_key}}" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"message\": \"Send an email to my boss about the quarterly report\"\n}"

@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,16 @@ func (r *mockSessionRepo) Close(_ context.Context, id uuid.UUID) error {
 	for i, s := range r.items {
 		if s.ID == id {
 			r.items[i].Active = false
+			return nil
+		}
+	}
+	return domain.ErrSessionNotFound
+}
+
+func (r *mockSessionRepo) Delete(_ context.Context, id uuid.UUID) error {
+	for i, s := range r.items {
+		if s.ID == id {
+			r.items = append(r.items[:i], r.items[i+1:]...)
 			return nil
 		}
 	}
@@ -295,7 +306,7 @@ func (r *mockApprovalRepo) Resolve(_ context.Context, id uuid.UUID, status, feed
 	for i, it := range r.items {
 		if it.ID == id {
 			r.items[i].Status = status
-			r.items[i].UserFeedback = feedback
+			r.items[i].UserFeedback = &feedback
 			r.items[i].ModifiedPlan = plan
 			return nil
 		}
@@ -312,7 +323,7 @@ func TestSessionCreate(t *testing.T) {
 	uc := newSessionUsecase(repo)
 
 	ctx := context.Background()
-	session, err := uc.Create(ctx)
+	session, err := uc.Create(ctx, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -332,7 +343,7 @@ func TestSessionGetByID(t *testing.T) {
 	uc := newSessionUsecase(repo)
 	ctx := context.Background()
 
-	created, _ := uc.Create(ctx)
+	created, _ := uc.Create(ctx, "")
 	found, err := uc.GetByID(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -358,9 +369,9 @@ func TestSessionList(t *testing.T) {
 	uc := newSessionUsecase(repo)
 	ctx := context.Background()
 
-	uc.Create(ctx)
-	uc.Create(ctx)
-	uc.Create(ctx)
+	uc.Create(ctx, "")
+	uc.Create(ctx, "")
+	uc.Create(ctx, "")
 
 	list, err := uc.List(ctx, 10)
 	if err != nil {
@@ -377,7 +388,7 @@ func TestSessionListWithLimit(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		uc.Create(ctx)
+		uc.Create(ctx, "")
 	}
 
 	list, err := uc.List(ctx, 2)
@@ -394,7 +405,7 @@ func TestSessionClose(t *testing.T) {
 	uc := newSessionUsecase(repo)
 	ctx := context.Background()
 
-	s, _ := uc.Create(ctx)
+	s, _ := uc.Create(ctx, "")
 	err := uc.Close(ctx, s.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -755,8 +766,11 @@ func newSessionUsecase(repo domain.SessionRepository) domain.SessionUsecase {
 	return &sessionUC{repo: repo}
 }
 
-func (u *sessionUC) Create(ctx context.Context) (*domain.Session, error) {
-	s := &domain.Session{ID: uuid.New(), Title: "New Conversation", Active: true}
+func (u *sessionUC) Create(ctx context.Context, title string) (*domain.Session, error) {
+	if strings.TrimSpace(title) == "" {
+		title = "New Conversation"
+	}
+	s := &domain.Session{ID: uuid.New(), Title: title, Active: true}
 	if err := u.repo.Create(ctx, s); err != nil {
 		return nil, err
 	}
@@ -776,6 +790,10 @@ func (u *sessionUC) List(ctx context.Context, limit int) ([]domain.Session, erro
 
 func (u *sessionUC) Close(ctx context.Context, id uuid.UUID) error {
 	return u.repo.Close(ctx, id)
+}
+
+func (u *sessionUC) Delete(ctx context.Context, id uuid.UUID) error {
+	return u.repo.Delete(ctx, id)
 }
 
 type profileUC struct{ repo domain.OwnerProfileRepository }

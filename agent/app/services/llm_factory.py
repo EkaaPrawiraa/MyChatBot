@@ -6,8 +6,7 @@ Supported providers:
   - xai (Grok) → ChatOpenAI with xAI base_url (OpenAI-compatible API)
 
 The factory reads ai_provider / ai_api_key / ai_model from the owner profile
-that was loaded during the load_context node.  Env-var defaults are used as
-fallback when the profile doesn't have a key configured yet.
+that was loaded during the load_context node.
 """
 
 from __future__ import annotations
@@ -47,9 +46,9 @@ def create_llm(
 ):
     """Return a LangChain chat model based on the owner's AI configuration.
 
-    Resolution order for each setting:
-      1. ``profile["ai_provider"]`` / ``profile["ai_api_key"]`` / ``profile["ai_model"]``
-      2. Environment variable defaults from ``app.config.settings``
+        Resolution order for each setting:
+            1. ``profile["ai_provider"]`` / ``profile["ai_api_key"]`` / ``profile["ai_model"]``
+            2. Fallback defaults from ``app.config.settings`` (model only)
 
     Parameters
     ----------
@@ -64,13 +63,13 @@ def create_llm(
     """
 
     provider = (profile or {}).get("ai_provider") or "openai"
-    api_key = (profile or {}).get("ai_api_key") or settings.openai_api_key
+    api_key = (profile or {}).get("ai_api_key")
     model = (profile or {}).get("ai_model") or settings.openai_model
 
     if not api_key:
         raise RuntimeError(
             f"No API key configured for provider '{provider}'. "
-            "Set it in your profile or via OPENAI_API_KEY env var."
+            "Set it in your profile (Settings page)."
         )
 
     if provider == "openai":

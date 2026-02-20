@@ -33,7 +33,7 @@ func (r *shortTermMemoryRepo) Store(ctx context.Context, m *domain.ShortTermMemo
 }
 
 func (r *shortTermMemoryRepo) GetBySession(ctx context.Context, sessionID uuid.UUID, limit int) ([]domain.ShortTermMemory, error) {
-	var msgs []domain.ShortTermMemory
+	msgs := make([]domain.ShortTermMemory, 0)
 	query := `
 		SELECT id, session_id, role, message, metadata, created_at
 		FROM conversation_memory_short

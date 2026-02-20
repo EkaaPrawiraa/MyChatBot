@@ -66,3 +66,6 @@ next-env.d.ts
 .vercel
 dashboard.txt
 
+# ---------- WhatsApp Bot (local session) ----------
+whatsapp_bot/auth/
+

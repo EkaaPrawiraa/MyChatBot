@@ -33,6 +33,7 @@ from app.errors import (
 )
 from app.graph import agent_graph
 from app.models.state import AxisState
+from app.services.backend_client import backend
 
 app = FastAPI(
     title="Axis Assistant — AI Orchestrator",
@@ -160,9 +161,6 @@ async def voice_to_text(
     """
     _verify_key(x_api_key)
 
-    if not settings.openai_api_key:
-        raise AgentError(CODE_INTERNAL, "OPENAI_API_KEY is required for Whisper transcription", 500)
-
     # Validate file extension
     ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else ""
     if ext not in _WHISPER_FORMATS:
@@ -179,9 +177,19 @@ async def voice_to_text(
     if len(audio_bytes) == 0:
         raise AgentError(CODE_VALIDATION, "Uploaded file is empty", 400)
 
+    try:
+        profile_resp = await backend.get_profile()
+        profile = (profile_resp or {}).get("data") or {}
+        ai_api_key = (profile or {}).get("ai_api_key") or ""
+    except Exception as exc:
+        raise AgentError(CODE_INTERNAL, f"Failed to load owner profile: {exc}", 500) from exc
+
+    if not ai_api_key:
+        raise AgentError(CODE_VALIDATION, "ai_api_key must be set in the owner profile", 400)
+
     # Call OpenAI Whisper API
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = AsyncOpenAI(api_key=ai_api_key)
         transcription = await client.audio.transcriptions.create(
             model="whisper-1",
             file=(file.filename or "audio.wav", audio_bytes),

@@ -29,9 +29,14 @@ func (r *longTermMemoryRepo) Store(ctx context.Context, m *domain.LongTermMemory
 		INSERT INTO conversation_memory_long (id, content, embedding, category, metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5, NOW())
 		RETURNING created_at`
-	embStr := floatsToVector(m.Embedding)
+	var embeddingValue any
+	if len(m.Embedding) > 0 {
+		embeddingValue = floatsToVector(m.Embedding)
+	} else {
+		embeddingValue = nil
+	}
 	return r.db.QueryRowxContext(ctx, query,
-		m.ID, m.Content, embStr, m.Category, m.Metadata,
+		m.ID, m.Content, embeddingValue, m.Category, m.Metadata,
 	).Scan(&m.CreatedAt)
 }
 
@@ -40,6 +45,7 @@ func (r *longTermMemoryRepo) SearchSimilar(ctx context.Context, embedding []floa
 	query := `
 		SELECT id, content, category, metadata, created_at
 		FROM conversation_memory_long
+		WHERE embedding IS NOT NULL
 		ORDER BY embedding <-> $1
 		LIMIT $2`
 	err := r.db.SelectContext(ctx, &memories, query, floatsToVector(embedding), limit)

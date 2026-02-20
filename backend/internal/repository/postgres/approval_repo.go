@@ -25,10 +25,11 @@ func (r *approvalRepo) Create(ctx context.Context, item *domain.ApprovalItem) er
 	}
 	query := `
 		INSERT INTO approval_queue (id, session_id, proposed_plan, status, created_at)
-		VALUES ($1, $2, $3, 'pending', NOW())
+		VALUES ($1, $2, $3::jsonb, 'pending', NOW())
 		RETURNING created_at`
+	proposed := string(item.ProposedPlan)
 	return r.db.QueryRowxContext(ctx, query,
-		item.ID, item.SessionID, item.ProposedPlan,
+		item.ID, item.SessionID, proposed,
 	).Scan(&item.CreatedAt)
 }
 
@@ -51,11 +52,17 @@ func (r *approvalRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Appro
 
 func (r *approvalRepo) Resolve(ctx context.Context, id uuid.UUID, status, feedback string, modifiedPlan []byte) error {
 	now := time.Now()
+	var modified any
+	if len(modifiedPlan) > 0 {
+		modified = string(modifiedPlan)
+	} else {
+		modified = nil
+	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE approval_queue
-		SET status = $1, user_feedback = $2, modified_plan = $3, resolved_at = $4
+		SET status = $1, user_feedback = $2, modified_plan = $3::jsonb, resolved_at = $4
 		WHERE id = $5 AND status = 'pending'`,
-		status, feedback, modifiedPlan, now, id)
+		status, feedback, modified, now, id)
 	if err != nil {
 		return err
 	}

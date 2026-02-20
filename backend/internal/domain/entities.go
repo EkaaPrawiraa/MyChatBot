@@ -28,6 +28,39 @@ type OwnerProfile struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// OwnerIntegrations stores third-party credentials/config for the single owner.
+// Sensitive fields must never be exposed in public JSON responses.
+type OwnerIntegrations struct {
+	OwnerID int `json:"owner_id" db:"owner_id"`
+
+	GoogleEmail       string    `json:"google_email" db:"google_email"`
+	GoogleRefreshToken string   `json:"-" db:"google_refresh_token"`
+	GoogleAccessToken  string   `json:"-" db:"google_access_token"`
+	GoogleTokenExpiry  time.Time `json:"-" db:"google_token_expiry"`
+
+	WhatsAppPhoneNumberID     string `json:"whatsapp_phone_number_id" db:"whatsapp_phone_number_id"`
+	WhatsAppBusinessAccountID string `json:"whatsapp_business_account_id" db:"whatsapp_business_account_id"`
+	WhatsAppAPIToken          string `json:"-" db:"whatsapp_api_token"`
+
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// IntegrationsStatus is safe to return to the dashboard.
+type IntegrationsStatus struct {
+	Google struct {
+		Connected bool   `json:"connected"`
+		Email     string `json:"email"`
+	} `json:"google"`
+
+	WhatsApp struct {
+		Configured         bool   `json:"configured"`
+		PhoneNumberID      string `json:"phone_number_id"`
+		BusinessAccountID  string `json:"business_account_id"`
+		APITokenMasked     string `json:"api_token_masked"`
+	} `json:"whatsapp"`
+}
+
 // AIKeyMasked returns a masked representation of the API key for display.
 func (o *OwnerProfile) AIKeyMasked() string {
 	if len(o.AIAPIKey) <= 8 {
@@ -114,7 +147,7 @@ type ApprovalItem struct {
 	SessionID    uuid.UUID  `json:"session_id" db:"session_id"`
 	ProposedPlan []byte     `json:"proposed_plan" db:"proposed_plan"`
 	Status       string     `json:"status" db:"status"` // pending | approved | rejected | expired
-	UserFeedback string     `json:"user_feedback,omitempty" db:"user_feedback"`
+	UserFeedback *string    `json:"user_feedback,omitempty" db:"user_feedback"`
 	ModifiedPlan []byte     `json:"modified_plan,omitempty" db:"modified_plan"`
 	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
 	ResolvedAt   *time.Time `json:"resolved_at,omitempty" db:"resolved_at"`

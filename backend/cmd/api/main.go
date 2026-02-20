@@ -52,22 +52,37 @@ func main() {
 	reminderRepo := postgres.NewReminderRepository(db)
 	automationRepo := postgres.NewAutomationRuleRepository(db)
 	approvalRepo := postgres.NewApprovalRepository(db)
+	integrationsRepo := postgres.NewOwnerIntegrationsRepository(db)
 
 	// ---- Usecases ----
 	profileUC := usecase.NewProfileUsecase(ownerProfileRepo)
 	sessionUC := usecase.NewSessionUsecase(sessionRepo)
 	chatUC := usecase.NewChatUsecase(cfg.AI.OrchestratorURL, cfg.App.APIKey)
-	memoryUC := usecase.NewMemoryUsecase(shortMemRepo, longMemRepo)
+	memoryUC := usecase.NewMemoryUsecase(shortMemRepo, longMemRepo, ownerProfileRepo)
 	activityUC := usecase.NewActivityUsecase(activityRepo)
 	reminderUC := usecase.NewReminderUsecase(reminderRepo)
-	approvalUC := usecase.NewApprovalUsecase(approvalRepo)
 	automationUC := usecase.NewAutomationUsecase(automationRepo)
+	integrationsUC := usecase.NewIntegrationsUsecase(
+		integrationsRepo,
+		cfg.Google.ClientID,
+		cfg.Google.ClientSecret,
+		cfg.Google.RedirectURL,
+		cfg.App.DashboardURL,
+	)
+	toolsUC := usecase.NewToolsUsecase(
+		integrationsRepo,
+		cfg.Google.ClientID,
+		cfg.Google.ClientSecret,
+		cfg.Google.RedirectURL,
+		cfg.WhatsApp.BotURL,
+	)
+	approvalUC := usecase.NewApprovalUsecase(approvalRepo, toolsUC, activityUC)
 
 	// ---- Handlers ----
 	handlers := router.Handlers{
 		Chat:       handler.NewChatHandler(chatUC),
 		Profile:    handler.NewProfileHandler(profileUC),
-		Session:    handler.NewSessionHandler(sessionUC),
+		Session:    handler.NewSessionHandler(sessionUC, memoryUC),
 		Activity:   handler.NewActivityHandler(activityUC),
 		Reminder:   handler.NewReminderHandler(reminderUC),
 		Approval:   handler.NewApprovalHandler(approvalUC),
@@ -75,6 +90,9 @@ func main() {
 		Automation: handler.NewAutomationHandler(automationUC),
 		Internal:   handler.NewInternalHandler(activityRepo, approvalRepo, profileUC, reminderUC),
 		AI:         handler.NewAIHandler(cfg.AI.OrchestratorURL, cfg.App.APIKey),
+		Integrations: handler.NewIntegrationsHandler(integrationsUC, cfg.App.DashboardURL),
+		Tools:        handler.NewToolsHandler(toolsUC, activityRepo),
+		WhatsAppWeb:  handler.NewWhatsAppWebHandler(cfg.WhatsApp.BotURL),
 	}
 
 	// ---- Gin Engine ----

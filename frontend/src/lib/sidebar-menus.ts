@@ -1,0 +1,91 @@
+import {
+  MessageSquare,
+  LayoutDashboard,
+  Activity,
+  Brain,
+  Calendar,
+  CheckCircle,
+  Zap,
+  Settings,
+} from "lucide-react";
+
+export type SidebarMenuKey =
+  | "dashboard"
+  | "chat"
+  | "activities"
+  | "calendar"
+  | "planning"
+  | "memory"
+  | "approvals"
+  | "automations"
+  | "email"
+  | "whatsapp"
+  | "settings";
+
+export type SidebarMenuItem = {
+  key: SidebarMenuKey;
+  label: string;
+  href: string;
+  icon: any;
+  locked?: boolean;
+};
+
+export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    key: "chat",
+    label: "Chat",
+    href: "/chat",
+    icon: MessageSquare,
+    locked: true,
+  },
+  {
+    key: "activities",
+    label: "Activities",
+    href: "/activities",
+    icon: Activity,
+  },
+  { key: "calendar", label: "Calendar", href: "/calendar", icon: Calendar },
+  { key: "planning", label: "Planning", href: "/planning", icon: Activity },
+  { key: "memory", label: "Memory", href: "/memory", icon: Brain },
+  {
+    key: "approvals",
+    label: "Approvals",
+    href: "/approvals",
+    icon: CheckCircle,
+  },
+  { key: "automations", label: "Automations", href: "/automations", icon: Zap },
+  { key: "email", label: "Email", href: "/email", icon: MessageSquare },
+  {
+    key: "whatsapp",
+    label: "WhatsApp",
+    href: "/whatsapp",
+    icon: MessageSquare,
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    locked: true,
+  },
+];
+
+export const DEFAULT_SIDEBAR_MENUS: Record<SidebarMenuKey, boolean> = {
+  dashboard: true,
+  chat: true,
+  activities: true,
+  calendar: true,
+  planning: true,
+  memory: true,
+  approvals: true,
+  automations: true,
+  email: true,
+  whatsapp: true,
+  settings: true,
+};

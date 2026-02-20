@@ -1,24 +1,26 @@
-'use client'
+"use client";
 
-import React from 'react'
-import { Sidebar } from './sidebar'
-import { Header } from './header'
-import { SIDEBAR_WIDTH } from '@/lib/constants'
+import React from "react";
+import { AppSidebar } from "@/src/components/layout/app-sidebar";
+import { Header } from "./header";
 
 interface AppLayoutProps {
-  children: React.ReactNode
-  title?: string
-  showSearch?: boolean
-  onSearchChange?: (value: string) => void
+  children: React.ReactNode;
+  title?: string;
+  showSearch?: boolean;
+  onSearchChange?: (value: string) => void;
 }
 
-export function AppLayout({ children, title, showSearch, onSearchChange }: AppLayoutProps) {
+export function AppLayout({
+  children,
+  title,
+  showSearch,
+  onSearchChange,
+}: AppLayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar - Hidden on mobile */}
-      <div className="hidden lg:flex w-[280px] flex-col flex-shrink-0 border-r border-white/10">
-        <Sidebar />
-      </div>
+      <AppSidebar />
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -32,10 +34,8 @@ export function AppLayout({ children, title, showSearch, onSearchChange }: AppLa
         </div>
 
         {/* Content Area */}
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
-  )
+  );
 }

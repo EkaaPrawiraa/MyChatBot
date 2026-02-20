@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"strconv"
 
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
@@ -9,16 +10,30 @@ import (
 )
 
 type SessionHandler struct {
-	uc domain.SessionUsecase
+	uc      domain.SessionUsecase
+	memoryU domain.MemoryUsecase
 }
 
-func NewSessionHandler(uc domain.SessionUsecase) *SessionHandler {
-	return &SessionHandler{uc: uc}
+func NewSessionHandler(uc domain.SessionUsecase, memoryU domain.MemoryUsecase) *SessionHandler {
+	return &SessionHandler{uc: uc, memoryU: memoryU}
+}
+
+type createSessionRequest struct {
+	Title string `json:"title"`
 }
 
 // Create handles POST /api/v1/sessions
 func (h *SessionHandler) Create(c *gin.Context) {
-	session, err := h.uc.Create(c.Request.Context())
+	var req createSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Empty body is allowed.
+		if err != io.EOF {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
+
+	session, err := h.uc.Create(c.Request.Context(), req.Title)
 	if err != nil {
 		mapDomainError(c, err)
 		return
@@ -58,6 +73,31 @@ func (h *SessionHandler) List(c *gin.Context) {
 	response.OK(c, sessions)
 }
 
+// GetMessages handles GET /api/v1/sessions/:id/messages?limit=200
+//
+// This returns the short-term conversation memory for a session so the
+// dashboard can render prior messages (ChatGPT-style history).
+func (h *SessionHandler) GetMessages(c *gin.Context) {
+	id, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+
+	limit := 200
+	if v := c.Query("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	msgs, err := h.memoryU.GetConversation(c.Request.Context(), id, limit)
+	if err != nil {
+		mapDomainError(c, err)
+		return
+	}
+	response.OK(c, msgs)
+}
+
 // Close handles POST /api/v1/sessions/:id/close
 func (h *SessionHandler) Close(c *gin.Context) {
 	id, ok := parseUUID(c, "id")
@@ -66,6 +106,23 @@ func (h *SessionHandler) Close(c *gin.Context) {
 	}
 
 	if err := h.uc.Close(c.Request.Context(), id); err != nil {
+		mapDomainError(c, err)
+		return
+	}
+	response.NoContent(c)
+}
+
+// Delete handles DELETE /api/v1/sessions/:id
+//
+// Deleting a session will also delete its short-term conversation history
+// due to FK constraints (ON DELETE CASCADE).
+func (h *SessionHandler) Delete(c *gin.Context) {
+	id, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := h.uc.Delete(c.Request.Context(), id); err != nil {
 		mapDomainError(c, err)
 		return
 	}

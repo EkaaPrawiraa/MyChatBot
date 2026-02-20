@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"strings"
 
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
 	"github.com/google/uuid"
@@ -15,10 +16,18 @@ func NewSessionUsecase(repo domain.SessionRepository) domain.SessionUsecase {
 	return &sessionUsecase{repo: repo}
 }
 
-func (u *sessionUsecase) Create(ctx context.Context) (*domain.Session, error) {
+
+func (u *sessionUsecase) Create(ctx context.Context, title string) (*domain.Session, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "New Conversation"
+	}
+	if len(title) > 120 {
+		title = title[:120]
+	}
 	s := &domain.Session{
 		ID:     uuid.New(),
-		Title:  "New Conversation",
+		Title:  title,
 		Active: true,
 	}
 	if err := u.repo.Create(ctx, s); err != nil {
@@ -40,4 +49,8 @@ func (u *sessionUsecase) List(ctx context.Context, limit int) ([]domain.Session,
 
 func (u *sessionUsecase) Close(ctx context.Context, id uuid.UUID) error {
 	return u.repo.Close(ctx, id)
+}
+
+func (u *sessionUsecase) Delete(ctx context.Context, id uuid.UUID) error {
+	return u.repo.Delete(ctx, id)
 }

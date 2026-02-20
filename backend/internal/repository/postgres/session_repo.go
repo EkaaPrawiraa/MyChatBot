@@ -47,3 +47,15 @@ func (r *sessionRepo) Close(ctx context.Context, id uuid.UUID) error {
 		`UPDATE sessions SET active = FALSE, updated_at = NOW() WHERE id = $1`, id)
 	return err
 }
+
+func (r *sessionRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return domain.ErrSessionNotFound
+	}
+	return nil
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func (m *mockProfileUsecase) GetProfile(ctx context.Context) (*domain.OwnerProfi
 	}
 	return &domain.OwnerProfile{
 		ID: 1, Name: "Test Owner", Email: "test@example.com",
-		AIProvider: "openai", AIModel: "gpt-4o-mini",
+		AIProvider: "openai", AIAPIKey: "sk-test-openai", AIModel: "gpt-4o-mini",
 	}, nil
 }
 
@@ -65,14 +66,17 @@ func (m *mockProfileUsecase) UpdateProfile(ctx context.Context, profile *domain.
 // --- SessionUsecase mock ---
 type mockSessionUsecase struct {
 	sessions []domain.Session
-	createFn func(ctx context.Context) (*domain.Session, error)
+	createFn func(ctx context.Context, title string) (*domain.Session, error)
 }
 
-func (m *mockSessionUsecase) Create(ctx context.Context) (*domain.Session, error) {
+func (m *mockSessionUsecase) Create(ctx context.Context, title string) (*domain.Session, error) {
 	if m.createFn != nil {
-		return m.createFn(ctx)
+		return m.createFn(ctx, title)
 	}
-	s := &domain.Session{ID: uuid.New(), Title: "New Conversation", Active: true, CreatedAt: time.Now()}
+	if strings.TrimSpace(title) == "" {
+		title = "New Conversation"
+	}
+	s := &domain.Session{ID: uuid.New(), Title: title, Active: true, CreatedAt: time.Now()}
 	return s, nil
 }
 
@@ -95,6 +99,16 @@ func (m *mockSessionUsecase) List(ctx context.Context, limit int) ([]domain.Sess
 func (m *mockSessionUsecase) Close(ctx context.Context, id uuid.UUID) error {
 	for _, s := range m.sessions {
 		if s.ID == id {
+			return nil
+		}
+	}
+	return domain.ErrSessionNotFound
+}
+
+func (m *mockSessionUsecase) Delete(ctx context.Context, id uuid.UUID) error {
+	for i, s := range m.sessions {
+		if s.ID == id {
+			m.sessions = append(m.sessions[:i], m.sessions[i+1:]...)
 			return nil
 		}
 	}
@@ -340,7 +354,7 @@ func setupRouter() (*gin.Engine, *testMocks) {
 	router.Setup(r, testAPIKey, router.Handlers{
 		Chat:       handler.NewChatHandler(mocks.chat),
 		Profile:    handler.NewProfileHandler(mocks.profile),
-		Session:    handler.NewSessionHandler(mocks.session),
+		Session:    handler.NewSessionHandler(mocks.session, mocks.memory),
 		Activity:   handler.NewActivityHandler(mocks.activity),
 		Reminder:   handler.NewReminderHandler(mocks.reminder),
 		Approval:   handler.NewApprovalHandler(mocks.approval),
@@ -433,31 +447,27 @@ func TestHealthCheck(t *testing.T) {
 // Auth / API Key
 // =====================================================================
 
-func TestMissingAPIKey(t *testing.T) {
+func TestPublicEndpointDoesNotRequireAPIKey(t *testing.T) {
 	r, _ := setupRouter()
 	rec := doRequestWithKey(r, http.MethodGet, "/api/v1/profile", nil, "")
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
-	env := parseEnvelope(t, rec)
-	if env.Success {
-		t.Fatal("expected success=false")
-	}
-}
-
-func TestInvalidAPIKey(t *testing.T) {
-	r, _ := setupRouter()
-	rec := doRequestWithKey(r, http.MethodGet, "/api/v1/profile", nil, "wrong-key")
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
-}
-
-func TestValidAPIKey(t *testing.T) {
-	r, _ := setupRouter()
-	rec := doRequest(r, http.MethodGet, "/api/v1/profile", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestInternalMissingAPIKey(t *testing.T) {
+	r, _ := setupRouter()
+	rec := doRequestWithKey(r, http.MethodGet, "/api/v1/internal/profile", nil, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestInternalInvalidAPIKey(t *testing.T) {
+	r, _ := setupRouter()
+	rec := doRequestWithKey(r, http.MethodGet, "/api/v1/internal/profile", nil, "wrong-key")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 }
 
@@ -544,6 +554,28 @@ func TestCreateSession(t *testing.T) {
 	env := parseEnvelope(t, rec)
 	if !env.Success {
 		t.Fatal("expected success=true")
+	}
+}
+
+func TestCreateSessionCustomTitle(t *testing.T) {
+	r, _ := setupRouter()
+	rec := doRequest(r, http.MethodPost, "/api/v1/sessions", map[string]interface{}{
+		"title": "My Custom Title",
+	})
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	env := parseEnvelope(t, rec)
+	if !env.Success {
+		t.Fatal("expected success=true")
+	}
+
+	var s domain.Session
+	json.Unmarshal(env.Data, &s)
+	if s.Title != "My Custom Title" {
+		t.Fatalf("expected title 'My Custom Title', got '%s'", s.Title)
 	}
 }
 
@@ -1002,7 +1034,9 @@ func TestInternalCreateApproval(t *testing.T) {
 	r, _ := setupRouter()
 	rec := doRequest(r, http.MethodPost, "/api/v1/internal/approval", map[string]interface{}{
 		"session_id": uuid.New().String(),
-		"status":     "pending",
+		"proposed_plan": []map[string]interface{}{
+			{"tool": "calendar.list", "input": map[string]interface{}{"maxResults": 3}},
+		},
 	})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d; body: %s", rec.Code, rec.Body.String())
@@ -1035,6 +1069,19 @@ func TestInternalGetProfile(t *testing.T) {
 	rec := doRequest(r, http.MethodGet, "/api/v1/internal/profile", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	env := parseEnvelope(t, rec)
+	if !env.Success {
+		t.Fatal("expected success=true")
+	}
+
+	var profile struct {
+		AIAPIKey string `json:"ai_api_key"`
+	}
+	json.Unmarshal(env.Data, &profile)
+	if profile.AIAPIKey != "sk-test-openai" {
+		t.Fatalf("expected ai_api_key to be returned for internal profile")
 	}
 }
 
@@ -1108,7 +1155,7 @@ func TestSessionUsecaseCreateAndList(t *testing.T) {
 	uc := NewTestSessionUsecase(repo)
 
 	ctx := context.Background()
-	s, err := uc.Create(ctx)
+	s, err := uc.Create(ctx, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1161,6 +1208,16 @@ func (r *mockSessionRepo) Close(ctx context.Context, id uuid.UUID) error {
 	return domain.ErrSessionNotFound
 }
 
+func (r *mockSessionRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	for i, s := range r.items {
+		if s.ID == id {
+			r.items = append(r.items[:i], r.items[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrSessionNotFound
+}
+
 // NewTestSessionUsecase is a test helper that mirrors the real constructor
 func NewTestSessionUsecase(repo domain.SessionRepository) domain.SessionUsecase {
 	return &testSessionUC{repo: repo}
@@ -1170,8 +1227,11 @@ type testSessionUC struct {
 	repo domain.SessionRepository
 }
 
-func (u *testSessionUC) Create(ctx context.Context) (*domain.Session, error) {
-	s := &domain.Session{ID: uuid.New(), Title: "New Conversation", Active: true}
+func (u *testSessionUC) Create(ctx context.Context, title string) (*domain.Session, error) {
+	if strings.TrimSpace(title) == "" {
+		title = "New Conversation"
+	}
+	s := &domain.Session{ID: uuid.New(), Title: title, Active: true}
 	if err := u.repo.Create(ctx, s); err != nil {
 		return nil, err
 	}
@@ -1188,6 +1248,10 @@ func (u *testSessionUC) List(ctx context.Context, limit int) ([]domain.Session, 
 
 func (u *testSessionUC) Close(ctx context.Context, id uuid.UUID) error {
 	return u.repo.Close(ctx, id)
+}
+
+func (u *testSessionUC) Delete(ctx context.Context, id uuid.UUID) error {
+	return u.repo.Delete(ctx, id)
 }
 
 // =====================================================================

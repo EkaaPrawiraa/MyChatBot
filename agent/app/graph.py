@@ -19,6 +19,7 @@ from app.nodes.plan_validation import plan_validation
 from app.nodes.execution import execution
 from app.nodes.memory_update import memory_update
 from app.nodes.response import response_node
+from app.nodes.activity_log import activity_log
 from app.services.backend_client import backend
 
 
@@ -55,11 +56,14 @@ async def _human_approval_node(state: AxisState) -> dict:
         await backend.create_approval({
             "id": approval_id,
             "session_id": state.session_id,
-            "proposed_plan": json.dumps([s.model_dump() for s in state.plan]).encode(),
+            "proposed_plan": [s.model_dump() for s in state.plan],
             "status": "pending",
         })
-    except Exception:
-        pass
+    except Exception as exc:
+        return {
+            "approval_id": approval_id,
+            "error": f"agent.approval_create_failed: {exc}",
+        }
 
     # Don't execute — jump straight to response.
     return {"approval_id": approval_id}
@@ -80,6 +84,7 @@ def build_graph() -> StateGraph:
     graph.add_node("plan_validation", plan_validation)
     graph.add_node("approval", _human_approval_node)
     graph.add_node("execution", execution)
+    graph.add_node("activity_log", activity_log)
     graph.add_node("response", response_node)
     graph.add_node("memory_update", memory_update)
 
@@ -102,11 +107,13 @@ def build_graph() -> StateGraph:
         "execution": "execution",
     })
 
-    # Approval → response (no execution yet)
-    graph.add_edge("approval", "response")
+    # Approval → activity log → response (no execution yet)
+    graph.add_edge("approval", "activity_log")
 
-    # Execution → response
-    graph.add_edge("execution", "response")
+    # Execution → activity log → response
+    graph.add_edge("execution", "activity_log")
+
+    graph.add_edge("activity_log", "response")
 
     # Response → memory update → END
     graph.add_edge("response", "memory_update")

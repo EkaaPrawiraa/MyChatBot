@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -12,12 +13,22 @@ type OwnerProfileRepository interface {
 	Update(ctx context.Context, profile *OwnerProfile) error
 }
 
+// OwnerIntegrationsRepository manages third-party integration credentials.
+type OwnerIntegrationsRepository interface {
+	Get(ctx context.Context) (*OwnerIntegrations, error)
+	UpsertGoogle(ctx context.Context, email, refreshToken, accessToken string, expiry *time.Time) error
+	ClearGoogle(ctx context.Context) error
+	UpsertWhatsApp(ctx context.Context, phoneNumberID, businessAccountID, apiToken string) error
+	ClearWhatsApp(ctx context.Context) error
+}
+
 // SessionRepository manages conversation sessions.
 type SessionRepository interface {
 	Create(ctx context.Context, session *Session) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Session, error)
 	List(ctx context.Context, limit int) ([]Session, error)
 	Close(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // ShortTermMemoryRepository manages in-session conversation messages.

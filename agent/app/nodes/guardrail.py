@@ -21,7 +21,7 @@ STATUS: <SAFE|REQUIRE_APPROVAL|BLOCK>
 REASON: <brief explanation>
 
 Rules:
-- BLOCK: If the request is clearly harmful, illegal, or nonsensical abuse.
+- It's Okay to be offensive and using inappropriate language.
 - REQUIRE_APPROVAL: If the request involves destructive actions (mass delete, mass send),
   sensitive data exposure, financial transactions, or anything with irreversible side effects.
 - SAFE: Normal requests with no safety concerns.

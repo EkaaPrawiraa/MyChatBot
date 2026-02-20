@@ -18,6 +18,9 @@ type Handlers struct {
 	Automation *handler.AutomationHandler
 	Internal   *handler.InternalHandler
 	AI         *handler.AIHandler
+	Integrations *handler.IntegrationsHandler
+	Tools        *handler.ToolsHandler
+	WhatsAppWeb  *handler.WhatsAppWebHandler
 }
 
 // Setup configures all routes on the given gin engine.
@@ -34,10 +37,9 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 	})
 
 	// ------------------------------------------------------------------
-	// Public API (dashboard-facing) — guarded by API key
+	// Public API (dashboard-facing)
 	// ------------------------------------------------------------------
 	api := r.Group("/api/v1")
-	api.Use(middleware.APIKeyAuth(apiKey))
 	{
 		// Chat
 		api.POST("/chat", h.Chat.SendMessage)
@@ -56,7 +58,9 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		api.POST("/sessions", h.Session.Create)
 		api.GET("/sessions", h.Session.List)
 		api.GET("/sessions/:id", h.Session.GetByID)
+		api.GET("/sessions/:id/messages", h.Session.GetMessages)
 		api.POST("/sessions/:id/close", h.Session.Close)
+		api.DELETE("/sessions/:id", h.Session.Delete)
 
 		// Activities
 		api.GET("/activities", h.Activity.List)
@@ -79,10 +83,42 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		api.GET("/automations", h.Automation.List)
 		api.PUT("/automations/:id", h.Automation.Update)
 		api.DELETE("/automations/:id", h.Automation.Delete)
+
+		// Integrations (Google OAuth + WhatsApp config)
+		api.GET("/integrations/status", h.Integrations.Status)
+		api.GET("/integrations/google/connect", h.Integrations.GoogleConnect)
+		api.GET("/integrations/google/callback", h.Integrations.GoogleCallback)
+		api.POST("/integrations/google/disconnect", h.Integrations.GoogleDisconnect)
+		api.PUT("/integrations/whatsapp", h.Integrations.WhatsAppUpsert)
+		api.POST("/integrations/whatsapp/disconnect", h.Integrations.WhatsAppDisconnect)
+
+		// Gmail (dashboard-facing)
+		api.GET("/gmail/unread", h.Tools.GmailUnread)
+		api.GET("/gmail/search", h.Tools.GmailSearch)
+		api.GET("/gmail/categorized-unread", h.Tools.GmailCategorizedUnread)
+		api.POST("/gmail/send", h.Tools.GmailSend)
+
+		// Calendar (dashboard-facing)
+		api.GET("/calendar/events", h.Tools.CalendarList)
+		api.POST("/calendar/events", h.Tools.CalendarCreate)
+		api.PUT("/calendar/events/:eventId", h.Tools.CalendarUpdate)
+		api.DELETE("/calendar/events/:eventId", h.Tools.CalendarDelete)
+		api.POST("/calendar/freebusy", h.Tools.CalendarFreeBusy)
+
+		// People / Drive / YouTube (dashboard-facing)
+		api.GET("/people/search", h.Tools.PeopleSearch)
+		api.GET("/drive/search", h.Tools.DriveSearch)
+		api.GET("/youtube/analytics", h.Tools.YouTubeAnalytics)
+
+		// WhatsApp (dashboard-facing)
+		api.POST("/whatsapp/send", h.Tools.WhatsAppSend)
+		api.GET("/whatsapp/status", h.WhatsAppWeb.Status)
+		api.GET("/whatsapp/qr.png", h.WhatsAppWeb.QRPNG)
+		api.POST("/whatsapp/logout", h.WhatsAppWeb.Logout)
 	}
 
 	// ------------------------------------------------------------------
-	// Internal API (agent → backend) — same API key auth
+	// Internal API (agent → backend) — guarded by service-to-service API key
 	// ------------------------------------------------------------------
 	internal := r.Group("/api/v1/internal")
 	internal.Use(middleware.APIKeyAuth(apiKey))
@@ -105,5 +141,22 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 
 		// Reminder (agent can create reminders)
 		internal.POST("/reminder", h.Internal.CreateReminder)
+
+		// Tools (agent -> backend)
+		internal.GET("/tools/gmail/unread", h.Tools.GmailUnread)
+		internal.GET("/tools/gmail/search", h.Tools.GmailSearch)
+		internal.GET("/tools/gmail/categorized-unread", h.Tools.GmailCategorizedUnread)
+		internal.POST("/tools/gmail/send", h.Tools.GmailSend)
+		internal.GET("/tools/calendar/events", h.Tools.CalendarList)
+		internal.POST("/tools/whatsapp/send", h.Tools.WhatsAppSend)
+		internal.POST("/tools/whatsapp/inbound", h.Tools.WhatsAppInbound)
+		internal.GET("/tools/whatsapp/status", h.WhatsAppWeb.Status)
+		internal.POST("/tools/calendar/events", h.Tools.CalendarCreate)
+		internal.PUT("/tools/calendar/events/:eventId", h.Tools.CalendarUpdate)
+		internal.DELETE("/tools/calendar/events/:eventId", h.Tools.CalendarDelete)
+		internal.POST("/tools/calendar/freebusy", h.Tools.CalendarFreeBusy)
+		internal.GET("/tools/people/search", h.Tools.PeopleSearch)
+		internal.GET("/tools/drive/search", h.Tools.DriveSearch)
+		internal.GET("/tools/youtube/analytics", h.Tools.YouTubeAnalytics)
 	}
 }

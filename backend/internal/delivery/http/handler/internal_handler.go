@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
 	"github.com/EkaaPrawiraa/axis-assistant/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -31,10 +33,35 @@ func NewInternalHandler(
 
 // LogActivity handles POST /api/v1/internal/activity
 func (h *InternalHandler) LogActivity(c *gin.Context) {
-	var log domain.ActivityLog
-	if err := c.ShouldBindJSON(&log); err != nil {
+	var req struct {
+		ID               uuid.UUID       `json:"id"`
+		SessionID        uuid.UUID       `json:"session_id"`
+		UserQuery        string          `json:"user_query"`
+		Intent           string          `json:"intent"`
+		ExecutionPlan    json.RawMessage `json:"execution_plan"`
+		ToolsUsed        json.RawMessage `json:"tools_used"`
+		ExecutionResults json.RawMessage `json:"execution_results"`
+		Success          bool            `json:"success"`
+		ErrorMessage     string          `json:"error_message"`
+		LatencyMs        int             `json:"latency_ms"`
+		TokenUsage       int             `json:"token_usage"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, err.Error())
 		return
+	}
+	log := domain.ActivityLog{
+		ID:               req.ID,
+		SessionID:        req.SessionID,
+		UserQuery:        req.UserQuery,
+		Intent:           req.Intent,
+		ExecutionPlan:    []byte(req.ExecutionPlan),
+		ToolsUsed:        []byte(req.ToolsUsed),
+		ExecutionResults: []byte(req.ExecutionResults),
+		Success:          req.Success,
+		ErrorMessage:     req.ErrorMessage,
+		LatencyMs:        req.LatencyMs,
+		TokenUsage:       req.TokenUsage,
 	}
 	if log.ID == uuid.Nil {
 		log.ID = uuid.New()
@@ -48,15 +75,24 @@ func (h *InternalHandler) LogActivity(c *gin.Context) {
 
 // CreateApproval handles POST /api/v1/internal/approval
 func (h *InternalHandler) CreateApproval(c *gin.Context) {
-	var item domain.ApprovalItem
-	if err := c.ShouldBindJSON(&item); err != nil {
+	var req struct {
+		ID           uuid.UUID       `json:"id"`
+		SessionID    uuid.UUID       `json:"session_id" binding:"required"`
+		ProposedPlan json.RawMessage `json:"proposed_plan"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, err.Error())
 		return
+	}
+	item := domain.ApprovalItem{
+		ID:           req.ID,
+		SessionID:    req.SessionID,
+		ProposedPlan: []byte(req.ProposedPlan),
+		Status:       "pending",
 	}
 	if item.ID == uuid.Nil {
 		item.ID = uuid.New()
 	}
-	item.Status = "pending"
 	if err := h.approvalRepo.Create(c.Request.Context(), &item); err != nil {
 		response.Internal(c, "failed to create approval")
 		return
@@ -85,7 +121,20 @@ func (h *InternalHandler) GetProfile(c *gin.Context) {
 		mapDomainError(c, err)
 		return
 	}
-	response.OK(c, profile)
+	// Internal endpoint is protected by API_KEY and may include sensitive fields
+	// required for agent execution.
+	type internalProfileResponse struct {
+		*domain.OwnerProfile
+		AIAPIKey     string          `json:"ai_api_key"`
+		AISkill      string          `json:"ai_skill"`
+		SidebarMenus map[string]bool `json:"sidebar_menus"`
+	}
+	response.OK(c, internalProfileResponse{
+		OwnerProfile: profile,
+		AIAPIKey:     profile.AIAPIKey,
+		AISkill:      getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus: getSidebarMenusFromPreferences(profile.Preferences),
+	})
 }
 
 // CreateReminder handles POST /api/v1/internal/reminder

@@ -1,17 +1,19 @@
-"""Application settings loaded from environment variables."""
+"""Application settings loaded from environment variables.
+
+Note:
+    The user's AI provider key (e.g. OpenAI API key) is not sourced from env.
+    It should be set by the user (via the dashboard) and stored in the backend
+    owner profile. The agent fetches that key from the backend internal profile
+    endpoint at runtime.
+"""
 
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Central configuration — values sourced from env / .env file.
+    """Central configuration — values sourced from env / .env file."""
 
-    These serve as **fallback defaults** when the owner hasn't configured
-    their AI provider in the profile yet.
-    """
-
-    # AI defaults (used when profile.ai_api_key is empty)
-    openai_api_key: str = ""
+    # AI defaults
     openai_model: str = "gpt-4o-mini"
 
     # Go backend

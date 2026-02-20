@@ -1,48 +1,55 @@
-'use client'
+"use client";
 
-import React, { useEffect, useRef } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { MessageBubble } from './message-bubble'
-import { TypingIndicator } from './typing-indicator'
-import { ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import type { Message } from '@/types'
+import React, { useEffect, useRef } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageBubble } from "./message-bubble";
+import { TypingIndicator } from "./typing-indicator";
+import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { Message } from "@/types";
 
 interface MessageListProps {
-  messages: Message[]
-  isLoading?: boolean
-  onScrollToBottom?: () => void
+  messages: Message[];
+  isLoading?: boolean;
+  onScrollToBottom?: () => void;
 }
 
-export function MessageList({ messages, isLoading, onScrollToBottom }: MessageListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [showScrollButton, setShowScrollButton] = React.useState(false)
+export function MessageList({
+  messages,
+  isLoading,
+  onScrollToBottom,
+}: MessageListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = React.useState(false);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' })
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, isLoading])
+    scrollToBottom();
+  }, [messages, isLoading]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const element = e.currentTarget
-    const isAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 50
-    setShowScrollButton(!isAtBottom)
-  }
+    const element = e.currentTarget;
+    const isAtBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight < 50;
+    setShowScrollButton(!isAtBottom);
+  };
 
   return (
-    <div className="relative flex-1 flex flex-col">
-      <ScrollArea className="flex-1" onScroll={handleScroll}>
+    <div className="relative flex-1 flex flex-col min-h-0">
+      <ScrollArea className="flex-1 min-h-0" onScroll={handleScroll}>
         <div className="p-4 space-y-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center text-muted-foreground py-20">
               <div>
                 <p className="text-lg font-medium mb-2">Start a conversation</p>
-                <p className="text-sm">Send a message to begin interacting with Axis Assistant</p>
+                <p className="text-sm">
+                  Send a message to begin interacting with aXis Assistant
+                </p>
               </div>
             </div>
           ) : (
@@ -62,15 +69,15 @@ export function MessageList({ messages, isLoading, onScrollToBottom }: MessageLi
         <Button
           size="icon"
           variant="secondary"
-          className="absolute bottom-4 right-4 rounded-full shadow-lg glow-purple"
+          className="absolute bottom-4 right-4 rounded-full shadow-lg"
           onClick={() => {
-            scrollToBottom()
-            setShowScrollButton(false)
+            scrollToBottom();
+            setShowScrollButton(false);
           }}
         >
           <ChevronDown size={20} />
         </Button>
       )}
     </div>
-  )
+  );
 }

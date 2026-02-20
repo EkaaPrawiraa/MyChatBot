@@ -7,8 +7,11 @@ import (
 )
 
 // APIKeyAuth validates the X-API-Key header (or ?api_key query param)
-// against the configured single-owner key. Used for both dashboard and
-// agent → backend internal calls.
+// against the configured service-to-service API key.
+//
+// This key is intended for agent ↔ backend internal calls (e.g. /api/v1/internal/*),
+// and is NOT the user's AI provider key (e.g. OpenAI key), which should be stored
+// in the owner profile.
 func APIKeyAuth(apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.GetHeader("X-API-Key")

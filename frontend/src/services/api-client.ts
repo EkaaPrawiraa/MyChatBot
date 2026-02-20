@@ -1,109 +1,188 @@
-import { API_BASE_URL, API_HEADERS, DEFAULT_QUERY_TIMEOUT } from '@/lib/constants'
-import { ApiResponse, APIEnvelope } from '@/types'
+import {
+  API_BASE_URL,
+  API_HEADERS,
+  DEFAULT_QUERY_TIMEOUT,
+} from "@/lib/constants";
+import type { ApiResponse } from "@/types";
 
-interface RequestInit extends Omit<RequestInit, 'body'> {
-  body?: unknown
+export type APIRequestInit = Omit<
+  globalThis.RequestInit,
+  "body" | "headers"
+> & {
+  body?: unknown;
+  headers?: HeadersInit;
+  timeoutMs?: number;
+};
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isApiResponse<T>(payload: unknown): payload is ApiResponse<T> {
+  return isObject(payload) && typeof payload.success === "boolean";
 }
 
 export class APIClient {
-  private baseUrl: string
-  private apiKey: string
+  private baseUrl: string;
+  private apiKey: string;
 
-  constructor(baseUrl: string = API_BASE_URL, apiKey: string = '') {
-    this.baseUrl = baseUrl
-    this.apiKey = apiKey
+  constructor(baseUrl: string = API_BASE_URL, apiKey: string = "") {
+    this.baseUrl = baseUrl;
+    this.apiKey = apiKey;
   }
 
-  private getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
-    const headers = {
-      ...API_HEADERS,
-      ...customHeaders,
+  private buildHeaders(body: unknown, customHeaders?: HeadersInit): Headers {
+    const headers = new Headers(API_HEADERS as Record<string, string>);
+
+    if (customHeaders) {
+      new Headers(customHeaders).forEach((value, key) => {
+        headers.set(key, value);
+      });
     }
 
-    if (this.apiKey) {
-      headers['X-API-Key'] = this.apiKey
+    // Let the browser/node fetch set the correct multipart boundary.
+    if (typeof FormData !== "undefined" && body instanceof FormData) {
+      headers.delete("Content-Type");
     }
 
-    return headers
+    // NOTE: X-API-Key is reserved for backend↔agent internal auth.
+    // The browser should not send it by default.
+
+    return headers;
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
-    const contentType = response.headers.get('content-type')
-    let data: unknown
+  private async parseBody(response: Response): Promise<unknown> {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return response.json();
+    }
+    return response.text();
+  }
 
-    if (contentType?.includes('application/json')) {
-      data = await response.json()
-    } else {
-      data = await response.text()
+  private unwrapEnvelope<T>(payload: unknown): T {
+    // Go backend uses: { success, data, error, meta }
+    if (isApiResponse<T>(payload)) {
+      const envelope = payload;
+      if (envelope.success) return envelope.data as T;
+
+      const message = envelope.error?.message || "Request failed";
+      throw new Error(message);
     }
 
-    if (!response.ok) {
-      const errorMessage = typeof data === 'object' && data !== null && 'error' in data 
-        ? (data as Record<string, unknown>).error 
-        : `HTTP ${response.status}`
-      throw new Error(String(errorMessage))
+    // Some older/other endpoints may use: { status, data, message }
+    if (isObject(payload) && "data" in payload) {
+      return (payload as { data: T }).data;
     }
 
-    // Handle wrapped responses
-    if (typeof data === 'object' && data !== null && 'data' in data) {
-      return (data as APIEnvelope<T>).data as T
-    }
-
-    return data as T
+    return payload as T;
   }
 
   async request<T>(
     endpoint: string,
-    options: RequestInit & { method: string } = { method: 'GET' }
+    options: APIRequestInit & { method: string } = { method: "GET" },
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`
-
-    const config: RequestInit = {
-      ...options,
-      headers: this.getHeaders(options.headers as Record<string, string>),
-      timeout: options.timeout || DEFAULT_QUERY_TIMEOUT,
-    }
-
-    if (options.body && typeof options.body === 'object') {
-      config.body = JSON.stringify(options.body)
-    } else if (options.body) {
-      config.body = options.body as BodyInit
-    }
+    const url = `${this.baseUrl}${endpoint}`;
+    const { timeoutMs, body, headers: customHeaders, ...rest } = options;
+    const effectiveTimeoutMs = timeoutMs ?? DEFAULT_QUERY_TIMEOUT;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), effectiveTimeoutMs);
 
     try {
-      const response = await fetch(url, config as RequestInit)
-      return this.handleResponse<T>(response)
+      const headers = this.buildHeaders(body, customHeaders);
+
+      const config: globalThis.RequestInit = {
+        ...rest,
+        headers,
+        signal: controller.signal,
+      };
+
+      // Body handling
+      if (body === undefined || body === null) {
+        delete (config as { body?: unknown }).body;
+      } else if (typeof FormData !== "undefined" && body instanceof FormData) {
+        config.body = body as BodyInit;
+      } else if (
+        typeof body === "string" ||
+        body instanceof Blob ||
+        body instanceof ArrayBuffer
+      ) {
+        config.body = body as BodyInit;
+      } else if (typeof body === "object") {
+        config.body = JSON.stringify(body);
+      } else {
+        config.body = String(body);
+      }
+
+      const response = await fetch(url, config);
+      const payload = await this.parseBody(response);
+
+      if (!response.ok) {
+        // Prefer backend envelope error message when available.
+        if (isObject(payload)) {
+          const errVal = payload.error;
+          if (isObject(errVal) && typeof errVal.message === "string") {
+            throw new Error(errVal.message);
+          }
+          if (typeof errVal === "string") {
+            throw new Error(errVal);
+          }
+          if (typeof payload.message === "string") {
+            throw new Error(payload.message);
+          }
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return this.unwrapEnvelope<T>(payload);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Network request failed'
-      throw new Error(`API Error: ${message}`)
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Request timed out");
+      }
+      const message =
+        error instanceof Error ? error.message : "Network request failed";
+      throw new Error(`API Error: ${message}`);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
-  async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'GET' })
+  async get<T>(endpoint: string, options?: APIRequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "GET" });
   }
 
-  async post<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'POST', body })
+  async post<T>(
+    endpoint: string,
+    body?: unknown,
+    options?: APIRequestInit,
+  ): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "POST", body });
   }
 
-  async put<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'PUT', body })
+  async put<T>(
+    endpoint: string,
+    body?: unknown,
+    options?: APIRequestInit,
+  ): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "PUT", body });
   }
 
-  async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'DELETE' })
+  async delete<T>(endpoint: string, options?: APIRequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "DELETE" });
   }
 
-  async patch<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'PATCH', body })
+  async patch<T>(
+    endpoint: string,
+    body?: unknown,
+    options?: APIRequestInit,
+  ): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "PATCH", body });
   }
 
   setApiKey(apiKey: string): void {
-    this.apiKey = apiKey
+    this.apiKey = apiKey;
   }
 }
 
-// Create a singleton instance
-const apiClient = new APIClient()
-export default apiClient
+// Singleton
+const apiClient = new APIClient();
+export default apiClient;

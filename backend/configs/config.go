@@ -13,6 +13,7 @@ type Config struct {
 	DB     DBConfig
 	AI     AIConfig
 	Google GoogleConfig
+	WhatsApp WhatsAppConfig
 }
 
 type AppConfig struct {
@@ -20,6 +21,7 @@ type AppConfig struct {
 	Port   string
 	Env    string
 	APIKey string // single-owner API key for dashboard & agent auth
+	DashboardURL string // optional: where to send the browser after OAuth callbacks
 }
 
 type DBConfig struct {
@@ -48,6 +50,11 @@ type GoogleConfig struct {
 	RedirectURL  string
 }
 
+type WhatsAppConfig struct {
+	VerifyToken string
+	BotURL      string
+}
+
 // Load reads .env and populates Config.
 func Load() (*Config, error) {
 	_ = godotenv.Load()
@@ -58,6 +65,7 @@ func Load() (*Config, error) {
 			Port:   env("APP_PORT", "8080"),
 			Env:    env("APP_ENV", "development"),
 			APIKey: env("API_KEY", ""),
+			DashboardURL: env("DASHBOARD_URL", ""),
 		},
 		DB: DBConfig{
 			Host:     env("DB_HOST", "localhost"),
@@ -74,6 +82,10 @@ func Load() (*Config, error) {
 			ClientID:     env("GOOGLE_CLIENT_ID", ""),
 			ClientSecret: env("GOOGLE_CLIENT_SECRET", ""),
 			RedirectURL:  env("GOOGLE_REDIRECT_URL", ""),
+		},
+		WhatsApp: WhatsAppConfig{
+			VerifyToken: env("WHATSAPP_VERIFY_TOKEN", ""),
+			BotURL:      env("WHATSAPP_BOT_URL", "http://localhost:3100"),
 		},
 	}
 

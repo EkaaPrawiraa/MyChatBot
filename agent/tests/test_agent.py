@@ -23,7 +23,6 @@ from fastapi.testclient import TestClient
 # Patch settings BEFORE importing the app so we control config
 with patch.dict("os.environ", {
     "API_KEY": "test-secret",
-    "OPENAI_API_KEY": "sk-test-fake-key",
     "OPENAI_MODEL": "gpt-4o-mini",
     "BACKEND_URL": "http://localhost:8080",
 }):
@@ -266,7 +265,10 @@ class TestVoice:
             return_value=mock_transcription
         )
 
-        with patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
+        with patch(
+            "app.main.backend.get_profile",
+            new=AsyncMock(return_value={"success": True, "data": {"ai_api_key": "sk-test"}}),
+        ), patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
             file_data = io.BytesIO(b"fake audio bytes")
             resp = client.post("/voice", headers=HEADERS, files={
                 "file": ("test.wav", file_data, "audio/wav"),
@@ -290,7 +292,10 @@ class TestVoice:
             return_value=mock_transcription
         )
 
-        with patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
+        with patch(
+            "app.main.backend.get_profile",
+            new=AsyncMock(return_value={"success": True, "data": {"ai_api_key": "sk-test"}}),
+        ), patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
             for fmt in supported:
                 file_data = io.BytesIO(b"fake audio")
                 resp = client.post("/voice", headers=HEADERS, files={
@@ -305,7 +310,10 @@ class TestVoice:
             side_effect=Exception("Whisper API down")
         )
 
-        with patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
+        with patch(
+            "app.main.backend.get_profile",
+            new=AsyncMock(return_value={"success": True, "data": {"ai_api_key": "sk-test"}}),
+        ), patch("app.main.AsyncOpenAI", return_value=mock_client_instance):
             file_data = io.BytesIO(b"fake audio bytes")
             resp = client.post("/voice", headers=HEADERS, files={
                 "file": ("test.wav", file_data, "audio/wav"),
@@ -643,6 +651,43 @@ class TestPlanValidationNode:
         result = await plan_validation(state)
         assert result == {}
 
+    @pytest.mark.asyncio
+    async def test_whatsapp_sensitive_message_requires_approval(self):
+        from app.nodes.plan_validation import plan_validation
+
+        state = AxisState(
+            plan=[
+                PlanStep(tool="whatsapp.send", input={
+                    "to": "08123456789",
+                    "message": "My password is 123456",
+                }),
+            ],
+            requires_approval=False,
+            guardrail_status="SAFE",
+        )
+
+        result = await plan_validation(state)
+        assert result["requires_approval"] is True
+        assert result["guardrail_status"] == "REQUIRE_APPROVAL"
+
+    @pytest.mark.asyncio
+    async def test_whatsapp_normal_message_does_not_force_approval(self):
+        from app.nodes.plan_validation import plan_validation
+
+        state = AxisState(
+            plan=[
+                PlanStep(tool="whatsapp.send", input={
+                    "to": "08123456789",
+                    "message": "Hey, see you at 7!",
+                }),
+            ],
+            requires_approval=False,
+            guardrail_status="SAFE",
+        )
+
+        result = await plan_validation(state)
+        assert "requires_approval" not in result
+
 
 class TestExecutionNode:
     @pytest.mark.asyncio
@@ -652,7 +697,11 @@ class TestExecutionNode:
         state = AxisState(plan=[
             PlanStep(tool="gmail.send", input={"to": "bob@test.com"}),
         ])
-        result = await execution(state)
+        with patch(
+            "app.nodes.execution.backend.gmail_send",
+            new=AsyncMock(return_value={"success": True, "data": {"id": "msg_123"}, "error": None, "meta": {}}),
+        ):
+            result = await execution(state)
         assert "execution_results" in result
         assert "tools_used" in result
         assert len(result["tools_used"]) == 1
@@ -715,7 +764,6 @@ class TestMemoryUpdateNode:
 
         with patch("app.nodes.memory_update.backend") as mock_backend:
             mock_backend.store_short_term = AsyncMock(return_value={})
-            mock_backend.store_long_term = AsyncMock(return_value={})
 
             result = await memory_update(state)
             assert result == {}
@@ -734,14 +782,14 @@ class TestMemoryUpdateNode:
             final_response="I'll remember that!",
         )
 
-        with patch("app.nodes.memory_update.backend") as mock_backend:
+        with patch("app.nodes.memory_update.backend") as mock_backend, patch(
+            "app.nodes.memory_update.enqueue_long_term_memory_write"
+        ) as mock_enqueue:
             mock_backend.store_short_term = AsyncMock(return_value={})
-            mock_backend.store_long_term = AsyncMock(return_value={})
 
             await memory_update(state)
 
-            # Should also call store_long_term
-            mock_backend.store_long_term.assert_called_once()
+            mock_enqueue.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_memory_update_handles_failure(self):
@@ -786,18 +834,16 @@ class TestLLMFactory:
     def test_no_api_key_raises(self):
         from app.services.llm_factory import create_llm
 
-        # Clear the env default
-        with patch.object(app.config.settings, "openai_api_key", ""):
-            with pytest.raises(RuntimeError, match="No API key"):
-                create_llm({"ai_provider": "openai", "ai_api_key": "", "ai_model": "gpt-4o"})
+        with pytest.raises(RuntimeError, match="No API key"):
+            create_llm({"ai_provider": "openai", "ai_api_key": "", "ai_model": "gpt-4o"})
 
     def test_default_provider_is_openai(self):
         from app.services.llm_factory import create_llm
 
         with patch("app.services.llm_factory.ChatOpenAI") as MockChat:
             MockChat.return_value = MagicMock()
-            llm = create_llm(None)
-            # Should default to openai
+            llm = create_llm({"ai_api_key": "sk-test", "ai_model": "gpt-4o-mini"})
+            # Should default to openai when provider is not set
             MockChat.assert_called_once()
 
 

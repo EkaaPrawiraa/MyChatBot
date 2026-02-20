@@ -24,12 +24,31 @@ Given the user's message and conversation context, classify the intent into EXAC
 - MEMORY_WRITE: The user explicitly wants to store a note or preference.
 - SYSTEM_ACTION: Administrative actions (clear session, update profile, etc.).
 
+Guidance:
+- If the user asks to set a reminder ("remind me...", "set a reminder..."), classify as TASK_EXECUTION.
+- If the user asks to schedule something on a calendar, classify as TASK_EXECUTION.
+
 Respond with ONLY the intent label, nothing else.
 """
 
 
 async def intent_classification(state: AxisState) -> dict:
     """Classify user intent via LLM and set state.intent."""
+
+    msg_lower = (state.user_input or "").lower()
+    if any(
+        phrase in msg_lower
+        for phrase in (
+            "remember",
+            "note this",
+            "note down",
+            "save this",
+            "store this",
+            "my name is",
+            "i prefer",
+        )
+    ):
+        return {"intent": "MEMORY_WRITE"}
 
     llm = create_llm(
         profile=state.owner_profile,
