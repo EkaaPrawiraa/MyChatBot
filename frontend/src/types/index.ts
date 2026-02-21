@@ -141,7 +141,7 @@ export interface AutomationCreateRequest {
   enabled: boolean;
 }
 
-export interface AutomationUpdateRequest extends AutomationCreateRequest {}
+export type AutomationUpdateRequest = Partial<AutomationCreateRequest>;
 
 // Reminder Types
 export interface Reminder {

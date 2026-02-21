@@ -26,12 +26,17 @@ export function useCreateAutomation() {
   });
 }
 
-export function useUpdateAutomation(id: string) {
+export function useUpdateAutomation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: AutomationUpdateRequest) =>
-      automationService.updateAutomation(id, request),
+    mutationFn: ({
+      id,
+      request,
+    }: {
+      id: string;
+      request: AutomationUpdateRequest;
+    }) => automationService.updateAutomation(id, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTOMATIONS });
     },

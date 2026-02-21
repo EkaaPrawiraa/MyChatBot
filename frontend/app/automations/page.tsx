@@ -30,9 +30,21 @@ import { toast } from "sonner";
 export default function AutomationsPage() {
   const { data: automations = [], isLoading } = useAutomations();
   const { mutate: createAutomation } = useCreateAutomation();
+  const { mutate: updateAutomation, isPending: isUpdating } =
+    useUpdateAutomation();
   const { mutate: deleteAutomation } = useDeleteAutomation();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [formData, setFormData] = React.useState({
+    name: "",
+    trigger: "",
+    condition: "",
+    action: "",
+    enabled: true,
+  });
+
+  const [editFormData, setEditFormData] = React.useState({
     name: "",
     trigger: "",
     condition: "",
@@ -77,6 +89,64 @@ export default function AutomationsPage() {
         toast.error("Failed to delete automation");
       },
     });
+  };
+
+  const openEditDialog = (id: string) => {
+    const automation = automations.find((a) => a.id === id);
+    if (!automation) return;
+
+    setEditingId(id);
+    setEditFormData({
+      name: automation.name,
+      trigger: automation.trigger,
+      condition: automation.condition ?? "",
+      action: automation.action ?? "",
+      enabled: automation.enabled,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingId) return;
+    if (
+      !editFormData.name.trim() ||
+      !editFormData.trigger.trim() ||
+      !editFormData.action.trim()
+    ) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    updateAutomation(
+      {
+        id: editingId,
+        request: editFormData,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Automation updated");
+          setIsEditDialogOpen(false);
+          setEditingId(null);
+        },
+        onError: () => {
+          toast.error("Failed to update automation");
+        },
+      },
+    );
+  };
+
+  const handleToggleEnabled = (id: string, enabled: boolean) => {
+    updateAutomation(
+      {
+        id,
+        request: { enabled },
+      },
+      {
+        onError: () => {
+          toast.error("Failed to update automation");
+        },
+      },
+    );
   };
 
   return (
@@ -144,7 +214,13 @@ export default function AutomationsPage() {
                           </Badge>
                         </div>
                       </div>
-                      <Switch checked={automation.enabled} />
+                      <Switch
+                        checked={automation.enabled}
+                        onCheckedChange={(checked) =>
+                          handleToggleEnabled(automation.id, checked)
+                        }
+                        disabled={isUpdating}
+                      />
                     </div>
                   </CardHeader>
 
@@ -169,11 +245,11 @@ export default function AutomationsPage() {
                     </div>
 
                     <div className="flex gap-2 mt-4">
-                      <Footer className="flex-shrink-0" />
                       <Button
                         size="sm"
                         variant="outline"
                         className="flex-1 border-border hover:bg-accent h-8"
+                        onClick={() => openEditDialog(automation.id)}
                       >
                         <Edit2 size={14} className="mr-1" />
                         Edit
@@ -194,6 +270,8 @@ export default function AutomationsPage() {
             </div>
           )}
         </div>
+
+        <Footer />
       </div>
 
       {/* Create Dialog */}
@@ -283,6 +361,121 @@ export default function AutomationsPage() {
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) setEditingId(null);
+        }}
+      >
+        <DialogContent className="glass-dark">
+          <DialogHeader>
+            <DialogTitle>Edit Automation</DialogTitle>
+            <DialogDescription>
+              Update an existing automation rule
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Name
+              </label>
+              <Input
+                placeholder="My automation"
+                value={editFormData.name}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, name: e.target.value })
+                }
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Trigger
+              </label>
+              <Input
+                placeholder="e.g., daily, on_message, on_reminder"
+                value={editFormData.trigger}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, trigger: e.target.value })
+                }
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Condition (Optional)
+              </label>
+              <Input
+                placeholder="e.g., if time > 9:00"
+                value={editFormData.condition}
+                onChange={(e) =>
+                  setEditFormData({
+                    ...editFormData,
+                    condition: e.target.value,
+                  })
+                }
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Action
+              </label>
+              <Input
+                placeholder="e.g., send_notification, log_activity"
+                value={editFormData.action}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, action: e.target.value })
+                }
+                className="mt-1"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-muted-foreground">
+                Enabled
+              </label>
+              <Switch
+                checked={editFormData.enabled}
+                onCheckedChange={(checked) =>
+                  setEditFormData({ ...editFormData, enabled: checked })
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving
+                </>
+              ) : (
+                "Save"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
