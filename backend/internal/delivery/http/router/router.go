@@ -8,25 +8,27 @@ import (
 
 // Handlers aggregates all handler instances for registration.
 type Handlers struct {
-	Chat       *handler.ChatHandler
-	Profile    *handler.ProfileHandler
-	Session    *handler.SessionHandler
-	Activity   *handler.ActivityHandler
-	Reminder   *handler.ReminderHandler
-	Approval   *handler.ApprovalHandler
-	Memory     *handler.MemoryHandler
-	Automation *handler.AutomationHandler
-	Internal   *handler.InternalHandler
-	AI         *handler.AIHandler
-	Integrations *handler.IntegrationsHandler
-	Tools        *handler.ToolsHandler
-	WhatsAppWeb  *handler.WhatsAppWebHandler
+	Chat          *handler.ChatHandler
+	Profile       *handler.ProfileHandler
+	Session       *handler.SessionHandler
+	Activity      *handler.ActivityHandler
+	Reminder      *handler.ReminderHandler
+	Approval      *handler.ApprovalHandler
+	Memory        *handler.MemoryHandler
+	Automation    *handler.AutomationHandler
+	Internal      *handler.InternalHandler
+	AI            *handler.AIHandler
+	Integrations  *handler.IntegrationsHandler
+	Tools         *handler.ToolsHandler
+	Documents     *handler.DocumentsHandler
+	WhatsAppWeb   *handler.WhatsAppWebHandler
+	WhatsAppInbox *handler.WhatsAppInboxHandler
 }
 
 // Setup configures all routes on the given gin engine.
 func Setup(r *gin.Engine, apiKey string, h Handlers) {
 	// Global middleware — order matters
-	r.Use(middleware.RequestID())    // assign request ID first
+	r.Use(middleware.RequestID()) // assign request ID first
 	r.Use(middleware.CORS())
 	r.Use(middleware.RequestLogger()) // logger reads request_id
 	r.Use(gin.Recovery())
@@ -91,6 +93,10 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		api.POST("/integrations/google/disconnect", h.Integrations.GoogleDisconnect)
 		api.PUT("/integrations/whatsapp", h.Integrations.WhatsAppUpsert)
 		api.POST("/integrations/whatsapp/disconnect", h.Integrations.WhatsAppDisconnect)
+		api.PUT("/integrations/telegram", h.Integrations.TelegramUpsert)
+		api.POST("/integrations/telegram/disconnect", h.Integrations.TelegramDisconnect)
+		api.PUT("/integrations/discord", h.Integrations.DiscordUpsert)
+		api.POST("/integrations/discord/disconnect", h.Integrations.DiscordDisconnect)
 
 		// Gmail (dashboard-facing)
 		api.GET("/gmail/unread", h.Tools.GmailUnread)
@@ -108,13 +114,24 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		// People / Drive / YouTube (dashboard-facing)
 		api.GET("/people/search", h.Tools.PeopleSearch)
 		api.GET("/drive/search", h.Tools.DriveSearch)
+		api.GET("/drive/export", h.Tools.DriveExport)
+		api.POST("/drive/create-text", h.Tools.DriveCreateTextFile)
+		api.POST("/drive/create-doc", h.Tools.DriveCreateGoogleDoc)
+		api.POST("/drive/create-sheet", h.Tools.DriveCreateGoogleSheet)
+		api.POST("/documents/summarize", h.Documents.Summarize)
 		api.GET("/youtube/analytics", h.Tools.YouTubeAnalytics)
 
 		// WhatsApp (dashboard-facing)
 		api.POST("/whatsapp/send", h.Tools.WhatsAppSend)
+		api.POST("/telegram/send", h.Tools.TelegramSend)
+		api.GET("/telegram/updates", h.Tools.TelegramUpdates)
+		api.POST("/discord/webhook/send", h.Tools.DiscordWebhookSend)
 		api.GET("/whatsapp/status", h.WhatsAppWeb.Status)
 		api.GET("/whatsapp/qr.png", h.WhatsAppWeb.QRPNG)
 		api.POST("/whatsapp/logout", h.WhatsAppWeb.Logout)
+		api.GET("/whatsapp/inbox", h.WhatsAppInbox.List)
+		api.POST("/whatsapp/inbox/:id/suggest", h.WhatsAppInbox.Suggest)
+		api.POST("/whatsapp/inbox/:id/send", h.WhatsAppInbox.Send)
 	}
 
 	// ------------------------------------------------------------------
@@ -157,6 +174,10 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		internal.POST("/tools/calendar/freebusy", h.Tools.CalendarFreeBusy)
 		internal.GET("/tools/people/search", h.Tools.PeopleSearch)
 		internal.GET("/tools/drive/search", h.Tools.DriveSearch)
+		internal.GET("/tools/drive/export", h.Tools.DriveExport)
+		internal.POST("/tools/drive/create-text", h.Tools.DriveCreateTextFile)
+		internal.POST("/tools/drive/create-doc", h.Tools.DriveCreateGoogleDoc)
+		internal.POST("/tools/drive/create-sheet", h.Tools.DriveCreateGoogleSheet)
 		internal.GET("/tools/youtube/analytics", h.Tools.YouTubeAnalytics)
 	}
 }

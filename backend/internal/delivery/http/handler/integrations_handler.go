@@ -160,3 +160,68 @@ func (h *IntegrationsHandler) WhatsAppDisconnect(c *gin.Context) {
 	}
 	response.OK(c, gin.H{"disconnected": true})
 }
+
+type telegramUpsertRequest struct {
+	BotToken string `json:"bot_token"`
+}
+
+func (h *IntegrationsHandler) TelegramUpsert(c *gin.Context) {
+	var req telegramUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.uc.UpsertTelegram(c.Request.Context(), req.BotToken); err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	st, err := h.uc.GetStatus(c.Request.Context())
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, st)
+}
+
+func (h *IntegrationsHandler) TelegramDisconnect(c *gin.Context) {
+	if err := h.uc.DisconnectTelegram(c.Request.Context()); err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, gin.H{"disconnected": true})
+}
+
+type discordUpsertRequest struct {
+	WebhookURL string `json:"webhook_url"`
+	BotToken   string `json:"bot_token"`
+}
+
+func (h *IntegrationsHandler) DiscordUpsert(c *gin.Context) {
+	var req discordUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.uc.UpsertDiscord(c.Request.Context(), req.WebhookURL, req.BotToken); err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	st, err := h.uc.GetStatus(c.Request.Context())
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, st)
+}
+
+func (h *IntegrationsHandler) DiscordDisconnect(c *gin.Context) {
+	if err := h.uc.DisconnectDiscord(c.Request.Context()); err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, gin.H{"disconnected": true})
+}

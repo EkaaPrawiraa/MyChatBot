@@ -191,6 +191,51 @@ async def _execute_step(tool: str, input_data: dict) -> dict:
         resp = await backend.drive_search(query=query, page_size=page_size, page_token=page_token)
         return resp.get("data") or {}
 
+    if tool == "drive.export":
+        file_id = str(input_data.get("file_id") or input_data.get("fileId") or "").strip()
+        mime_type = str(input_data.get("mime_type") or input_data.get("mimeType") or "text/plain").strip()
+        max_bytes = int(input_data.get("max_bytes") or input_data.get("maxBytes") or 20000)
+        resp = await backend.drive_export(file_id=file_id, mime_type=mime_type, max_bytes=max_bytes)
+        return resp.get("data") or {}
+
+    if tool == "drive.create_text_file":
+        name = str(input_data.get("name") or "").strip()
+        content = str(input_data.get("content") or input_data.get("text") or "").strip()
+        mime_type = str(input_data.get("mime_type") or input_data.get("mimeType") or "text/plain").strip()
+        parent_id = input_data.get("parent_id") or input_data.get("parentId")
+        parent_id_str = str(parent_id).strip() if parent_id is not None else None
+        resp = await backend.drive_create_text_file(
+            name=name,
+            content=content,
+            mime_type=mime_type,
+            parent_id=parent_id_str,
+        )
+        return resp.get("data") or {}
+
+    if tool == "drive.create_google_doc":
+        name = str(input_data.get("name") or "").strip()
+        content = str(input_data.get("content") or input_data.get("text") or "")
+        parent_id = input_data.get("parent_id") or input_data.get("parentId")
+        parent_id_str = str(parent_id).strip() if parent_id is not None else None
+        resp = await backend.drive_create_google_doc(
+            name=name,
+            content=content,
+            parent_id=parent_id_str,
+        )
+        return resp.get("data") or {}
+
+    if tool == "drive.create_google_sheet":
+        name = str(input_data.get("name") or "").strip()
+        csv = str(input_data.get("csv") or input_data.get("content") or "")
+        parent_id = input_data.get("parent_id") or input_data.get("parentId")
+        parent_id_str = str(parent_id).strip() if parent_id is not None else None
+        resp = await backend.drive_create_google_sheet(
+            name=name,
+            csv=csv,
+            parent_id=parent_id_str,
+        )
+        return resp.get("data") or {}
+
     # YouTube
     if tool == "youtube.analytics":
         start_date = str(input_data.get("startDate") or input_data.get("start_date") or "").strip()

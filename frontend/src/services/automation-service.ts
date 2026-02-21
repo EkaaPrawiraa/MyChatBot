@@ -7,6 +7,8 @@ import type {
 } from "@/types";
 import { base64DecodeToUtf8 } from "@/lib/base64";
 
+export type { AutomationCreateRequest, AutomationUpdateRequest } from "@/types";
+
 type BackendAutomationRule = {
   id: string;
   name: string;

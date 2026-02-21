@@ -20,6 +20,7 @@ from fastapi import FastAPI, File, Header, Request, UploadFile
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
 from app.errors import (
@@ -34,6 +35,7 @@ from app.errors import (
 from app.graph import agent_graph
 from app.models.state import AxisState
 from app.services.backend_client import backend
+from app.services.llm_factory import create_llm
 
 app = FastAPI(
     title="Axis Assistant — AI Orchestrator",
@@ -103,6 +105,19 @@ class OrchestrateRequest(BaseModel):
     message: str
 
 
+class SuggestWhatsAppReplyRequest(BaseModel):
+    from_phone: str
+    from_name: str | None = None
+    message: str
+
+
+class SuggestDocumentSummaryRequest(BaseModel):
+    title: str | None = None
+    kind: str | None = None  # e.g. "doc" | "sheet"
+    content: str
+    max_words: int | None = None
+
+
 # ---------- Routes ----------
 
 @app.get("/health")
@@ -149,6 +164,131 @@ async def orchestrate(
         "tools_used": final_state.get("tools_used", []),
         "latency_ms": elapsed,
     })
+
+
+@app.post("/suggest/whatsapp")
+async def suggest_whatsapp_reply(
+    req: SuggestWhatsAppReplyRequest,
+    request: Request,
+    x_api_key: str = Header(...),
+):
+    """Generate a suggested WhatsApp reply.
+
+    This endpoint is intentionally *non-agentic*: it must not execute tools.
+    It only drafts a reply text for the user to review/approve.
+    """
+    _verify_key(x_api_key)
+
+    if not req.from_phone or not req.message:
+        raise AgentError(CODE_VALIDATION, "from_phone and message are required", 400)
+
+    start = time.time()
+
+    try:
+        profile_resp = await backend.get_profile()
+        profile = (profile_resp or {}).get("data") or {}
+    except Exception as exc:
+        raise AgentError(CODE_INTERNAL, f"Failed to load owner profile: {exc}", 500) from exc
+
+    llm = create_llm(profile=profile, temperature=0.3, max_tokens=220)
+
+    comm_style = str((profile or {}).get("communication_style") or "").strip()
+    style_line = (
+        f"Owner communication style preference: {comm_style}\n" if comm_style else ""
+    )
+
+    system_prompt = (
+        "You draft concise WhatsApp replies for the owner.\n"
+        "Rules:\n"
+        "- Output ONLY the reply text (no quotes, no markdown).\n"
+        "- Do NOT mention policies, tools, or that you are an AI.\n"
+        "- Keep it short and natural; ask one question if needed.\n"
+        "- Reply in the same language as the incoming message unless the owner style says otherwise.\n"
+        + style_line
+    )
+
+    sender = req.from_name or req.from_phone
+    user_prompt = (
+        f"Incoming WhatsApp message from {sender}:\n"
+        f"{req.message.strip()}\n\n"
+        "Draft a helpful reply the owner can send."
+    )
+
+    try:
+        resp = await llm.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ])
+    except Exception as exc:
+        raise AgentError(CODE_INTERNAL, f"Failed generating suggestion: {exc}", 500) from exc
+
+    elapsed = int((time.time() - start) * 1000)
+    reply = (resp.content or "").strip()
+    return _ok(request, {"reply": reply, "latency_ms": elapsed})
+
+
+@app.post("/suggest/document-summary")
+async def suggest_document_summary(
+    req: SuggestDocumentSummaryRequest,
+    request: Request,
+    x_api_key: str = Header(...),
+):
+    """Summarize a document's exported text.
+
+    This endpoint is intentionally *non-agentic*: it must not execute tools.
+    It only drafts a summary text for the user to review.
+    """
+    _verify_key(x_api_key)
+
+    if not req.content or not req.content.strip():
+        raise AgentError(CODE_VALIDATION, "content is required", 400)
+
+    start = time.time()
+
+    try:
+        profile_resp = await backend.get_profile()
+        profile = (profile_resp or {}).get("data") or {}
+    except Exception as exc:
+        raise AgentError(CODE_INTERNAL, f"Failed to load owner profile: {exc}", 500) from exc
+
+    llm = create_llm(profile=profile, temperature=0.2, max_tokens=450)
+
+    title = (req.title or "").strip()
+    kind = (req.kind or "").strip().lower()
+    max_words = req.max_words if req.max_words and req.max_words > 0 else None
+
+    limit_line = f"- Keep the summary under ~{max_words} words.\n" if max_words else ""
+    kind_line = f"Document type hint: {kind}\n" if kind else ""
+    title_line = f"Title: {title}\n" if title else ""
+
+    system_prompt = (
+        "You summarize document content for the owner.\n"
+        "Rules:\n"
+        "- Output ONLY the summary text (no markdown, no code fences).\n"
+        "- Be concise but include key facts, action items, and open questions if any.\n"
+        "- If content looks like a CSV/spreadsheet, describe key columns and notable rows/trends.\n"
+        + limit_line
+    )
+
+    user_prompt = (
+        title_line
+        + kind_line
+        + "Content:\n"
+        + req.content.strip()
+        + "\n\nWrite a clear summary the owner can read quickly."
+    )
+
+    try:
+        resp = await llm.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ])
+    except Exception as exc:
+        raise AgentError(CODE_INTERNAL, f"Failed generating summary: {exc}", 500) from exc
+
+    elapsed = int((time.time() - start) * 1000)
+    summary = (resp.content or "").strip()
+    return _ok(request, {"summary": summary, "latency_ms": elapsed})
 
 
 # ---------- Voice (Whisper STT) ----------

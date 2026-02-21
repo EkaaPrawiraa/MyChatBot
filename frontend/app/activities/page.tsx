@@ -9,6 +9,13 @@ import { ThemeToggle } from "@/src/components/layout/theme-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
 import { Loader2, ChevronDown } from "lucide-react";
 
@@ -19,6 +26,33 @@ type ExecutionStep = {
   success?: boolean;
   error?: string | null;
 };
+
+type FlowCategory =
+  | "all"
+  | "whatsapp"
+  | "gmail"
+  | "calendar"
+  | "contacts"
+  | "drive"
+  | "reminder"
+  | "memory"
+  | "youtube"
+  | "other";
+
+type StatusFilter = "all" | "success" | "failed";
+
+function getFlowCategoryFromTools(tools: string[] | undefined): FlowCategory {
+  const list = (tools || []).map((t) => String(t || "").toLowerCase());
+  if (list.some((t) => t.startsWith("whatsapp."))) return "whatsapp";
+  if (list.some((t) => t.startsWith("gmail."))) return "gmail";
+  if (list.some((t) => t.startsWith("calendar."))) return "calendar";
+  if (list.some((t) => t.startsWith("people."))) return "contacts";
+  if (list.some((t) => t.startsWith("drive."))) return "drive";
+  if (list.some((t) => t.startsWith("reminder."))) return "reminder";
+  if (list.some((t) => t.startsWith("memory."))) return "memory";
+  if (list.some((t) => t.startsWith("youtube."))) return "youtube";
+  return "other";
+}
 
 function safeJsonParse<T>(raw: string | undefined): T | undefined {
   if (!raw) return undefined;
@@ -221,6 +255,8 @@ export default function ActivitiesPage() {
   const [page, setPage] = React.useState(1);
   const pageSize = 20;
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+  const [flowFilter, setFlowFilter] = React.useState<FlowCategory>("all");
   const { data: activitiesPage = [], isLoading } = useActivities({
     page,
     pageSize,
@@ -246,6 +282,22 @@ export default function ActivitiesPage() {
   }, [activitiesPage, page]);
 
   const hasMore = activitiesPage.length === pageSize;
+
+  const filteredActivities = React.useMemo(() => {
+    return (activities || []).filter((a) => {
+      const statusOk =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "success"
+            ? a.success === true
+            : a.success === false;
+
+      const flow = getFlowCategoryFromTools(a.tools);
+      const flowOk = flowFilter === "all" ? true : flow === flowFilter;
+
+      return statusOk && flowOk;
+    });
+  }, [activities, statusFilter, flowFilter]);
 
   const toggleExpanded = (id: string) => {
     const newSet = new Set(expandedIds);
@@ -297,7 +349,75 @@ export default function ActivitiesPage() {
             </div>
           ) : (
             <div className="space-y-4 max-w-4xl mx-auto w-full">
-              {activities.map((activity) => (
+              <Card className="glass-dark">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Filters</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        Status
+                      </span>
+                      <Select
+                        value={statusFilter}
+                        onValueChange={(v) =>
+                          setStatusFilter(v as StatusFilter)
+                        }
+                      >
+                        <SelectTrigger size="sm" className="w-[160px]">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="success">Success</SelectItem>
+                          <SelectItem value="failed">Failed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        Flow
+                      </span>
+                      <Select
+                        value={flowFilter}
+                        onValueChange={(v) => setFlowFilter(v as FlowCategory)}
+                      >
+                        <SelectTrigger size="sm" className="w-[180px]">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          <SelectItem value="gmail">Gmail</SelectItem>
+                          <SelectItem value="calendar">Calendar</SelectItem>
+                          <SelectItem value="contacts">Contacts</SelectItem>
+                          <SelectItem value="drive">Drive</SelectItem>
+                          <SelectItem value="reminder">Reminder</SelectItem>
+                          <SelectItem value="memory">Memory</SelectItem>
+                          <SelectItem value="youtube">YouTube</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setFlowFilter("all");
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {filteredActivities.map((activity) => (
                 <Card
                   key={activity.id}
                   className="glass-dark transition-colors hover:bg-accent/40"

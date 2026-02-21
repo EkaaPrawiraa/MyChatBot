@@ -13,7 +13,7 @@ import (
 )
 
 type ToolsHandler struct {
-	uc          domain.ToolsUsecase
+	uc           domain.ToolsUsecase
 	activityRepo domain.ActivityLogRepository
 }
 
@@ -180,6 +180,85 @@ func (h *ToolsHandler) DriveSearch(c *gin.Context) {
 	response.OK(c, data)
 }
 
+func (h *ToolsHandler) DriveExport(c *gin.Context) {
+	fileID := c.Query("fileId")
+	if fileID == "" {
+		fileID = c.Query("file_id")
+	}
+	mimeType := c.Query("mimeType")
+	if mimeType == "" {
+		mimeType = c.Query("mime_type")
+	}
+	maxBytes := parseIntQuery(c, "maxBytes", 20000)
+	data, err := h.uc.DriveExport(c.Request.Context(), fileID, mimeType, maxBytes)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+type driveCreateTextFileRequest struct {
+	Name     string `json:"name"`
+	Content  string `json:"content"`
+	MimeType string `json:"mime_type"`
+	ParentID string `json:"parent_id"`
+}
+
+func (h *ToolsHandler) DriveCreateTextFile(c *gin.Context) {
+	var req driveCreateTextFileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.DriveCreateTextFile(c.Request.Context(), req.Name, req.Content, req.MimeType, req.ParentID)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+type driveCreateGoogleDocRequest struct {
+	Name     string `json:"name"`
+	Content  string `json:"content"`
+	ParentID string `json:"parent_id"`
+}
+
+func (h *ToolsHandler) DriveCreateGoogleDoc(c *gin.Context) {
+	var req driveCreateGoogleDocRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.DriveCreateGoogleDoc(c.Request.Context(), req.Name, req.Content, req.ParentID)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+type driveCreateGoogleSheetRequest struct {
+	Name     string `json:"name"`
+	CSV      string `json:"csv"`
+	ParentID string `json:"parent_id"`
+}
+
+func (h *ToolsHandler) DriveCreateGoogleSheet(c *gin.Context) {
+	var req driveCreateGoogleSheetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.DriveCreateGoogleSheet(c.Request.Context(), req.Name, req.CSV, req.ParentID)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
 func (h *ToolsHandler) YouTubeAnalytics(c *gin.Context) {
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
@@ -242,6 +321,56 @@ func (h *ToolsHandler) WhatsAppSend(c *gin.Context) {
 	response.OK(c, data)
 }
 
+type telegramSendRequest struct {
+	ChatID  string `json:"chat_id"`
+	Message string `json:"message"`
+}
+
+func (h *ToolsHandler) TelegramSend(c *gin.Context) {
+	var req telegramSendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.TelegramSend(c.Request.Context(), req.ChatID, req.Message)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+func (h *ToolsHandler) TelegramUpdates(c *gin.Context) {
+	offset := parseIntQuery(c, "offset", 0)
+	limit := parseIntQuery(c, "limit", 50)
+	timeoutSeconds := parseIntQuery(c, "timeout", 0)
+	data, err := h.uc.TelegramUpdates(c.Request.Context(), offset, limit, timeoutSeconds)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+type discordWebhookSendRequest struct {
+	Content  string `json:"content"`
+	Username string `json:"username"`
+}
+
+func (h *ToolsHandler) DiscordWebhookSend(c *gin.Context) {
+	var req discordWebhookSendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.DiscordWebhookSend(c.Request.Context(), req.Content, req.Username)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
 type whatsappInboundRequest struct {
 	From      string `json:"from"`
 	Message   string `json:"message"`
@@ -257,6 +386,8 @@ func (h *ToolsHandler) WhatsAppInbound(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	// Store inbound message into in-memory inbox (best-effort).
+	whatsappInbox.addInbound(req.From, req.Message, req.MessageID, req.Timestamp)
 	if h.activityRepo == nil {
 		response.OK(c, gin.H{"ok": true})
 		return

@@ -22,6 +22,12 @@ type BackendShortTermMessage = {
   created_at: string;
 };
 
+function isUserOrAssistantMessage(
+  m: BackendShortTermMessage,
+): m is BackendShortTermMessage & { role: "user" | "assistant" } {
+  return m.role === "user" || m.role === "assistant";
+}
+
 function mapSession(s: BackendSession): Session {
   return {
     id: s.id,
@@ -77,14 +83,12 @@ export const sessionService = {
       API_ENDPOINTS.SESSION_MESSAGES(id) + `?limit=${limit}`,
     );
 
-    return (backend || [])
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({
-        id: m.id,
-        sessionId: m.session_id,
-        role: m.role,
-        content: m.message,
-        createdAt: m.created_at,
-      }));
+    return (backend || []).filter(isUserOrAssistantMessage).map((m) => ({
+      id: m.id,
+      sessionId: m.session_id,
+      role: m.role,
+      content: m.message,
+      createdAt: m.created_at,
+    }));
   },
 };

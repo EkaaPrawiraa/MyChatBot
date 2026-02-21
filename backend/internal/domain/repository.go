@@ -20,6 +20,10 @@ type OwnerIntegrationsRepository interface {
 	ClearGoogle(ctx context.Context) error
 	UpsertWhatsApp(ctx context.Context, phoneNumberID, businessAccountID, apiToken string) error
 	ClearWhatsApp(ctx context.Context) error
+	UpsertTelegram(ctx context.Context, botToken string) error
+	ClearTelegram(ctx context.Context) error
+	UpsertDiscord(ctx context.Context, webhookURL, botToken string) error
+	ClearDiscord(ctx context.Context) error
 }
 
 // SessionRepository manages conversation sessions.

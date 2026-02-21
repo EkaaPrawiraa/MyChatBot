@@ -170,6 +170,63 @@ class BackendClient:
             params["pageToken"] = page_token
         return await self._get("/api/v1/internal/tools/drive/search", params=params)
 
+    async def drive_export(
+        self,
+        file_id: str,
+        mime_type: str = "text/plain",
+        max_bytes: int = 20000,
+    ) -> dict:
+        params: dict = {
+            "fileId": file_id,
+            "mimeType": mime_type,
+            "maxBytes": max_bytes,
+        }
+        return await self._get("/api/v1/internal/tools/drive/export", params=params)
+
+    async def drive_create_text_file(
+        self,
+        name: str,
+        content: str,
+        mime_type: str = "text/plain",
+        parent_id: str | None = None,
+    ) -> dict:
+        payload: dict = {
+            "name": name,
+            "content": content,
+            "mime_type": mime_type,
+        }
+        if parent_id:
+            payload["parent_id"] = parent_id
+        return await self._post("/api/v1/internal/tools/drive/create-text", json=payload)
+
+    async def drive_create_google_doc(
+        self,
+        name: str,
+        content: str = "",
+        parent_id: str | None = None,
+    ) -> dict:
+        payload: dict = {
+            "name": name,
+            "content": content,
+        }
+        if parent_id:
+            payload["parent_id"] = parent_id
+        return await self._post("/api/v1/internal/tools/drive/create-doc", json=payload)
+
+    async def drive_create_google_sheet(
+        self,
+        name: str,
+        csv: str = "",
+        parent_id: str | None = None,
+    ) -> dict:
+        payload: dict = {
+            "name": name,
+            "csv": csv,
+        }
+        if parent_id:
+            payload["parent_id"] = parent_id
+        return await self._post("/api/v1/internal/tools/drive/create-sheet", json=payload)
+
     async def youtube_analytics(self, start_date: str, end_date: str) -> dict:
         return await self._get(
             "/api/v1/internal/tools/youtube/analytics",

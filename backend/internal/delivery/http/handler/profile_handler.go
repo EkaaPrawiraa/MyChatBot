@@ -123,6 +123,8 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 			"activities":  true,
 			"calendar":    true,
 			"planning":    true,
+			"contacts":    true,
+			"documents":   true,
 			"memory":      true,
 			"approvals":   true,
 			"automations": true,

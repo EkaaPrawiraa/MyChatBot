@@ -20,6 +20,10 @@ type IntegrationsUsecase interface {
 	DisconnectGoogle(ctx context.Context) error
 	UpsertWhatsApp(ctx context.Context, phoneNumberID, businessAccountID, apiToken string) error
 	DisconnectWhatsApp(ctx context.Context) error
+	UpsertTelegram(ctx context.Context, botToken string) error
+	DisconnectTelegram(ctx context.Context) error
+	UpsertDiscord(ctx context.Context, webhookURL, botToken string) error
+	DisconnectDiscord(ctx context.Context) error
 	// Google OAuth flow
 	GoogleAuthURL(state string) (string, error)
 	HandleGoogleCallback(ctx context.Context, code string) error
@@ -38,8 +42,15 @@ type ToolsUsecase interface {
 	CalendarFreeBusy(ctx context.Context, timeMin, timeMax string) (any, error)
 	PeopleSearch(ctx context.Context, query string, pageSize int, pageToken string) (any, error)
 	DriveSearch(ctx context.Context, query string, pageSize int, pageToken string) (any, error)
+	DriveExport(ctx context.Context, fileID string, mimeType string, maxBytes int) (any, error)
+	DriveCreateTextFile(ctx context.Context, name string, content string, mimeType string, parentID string) (any, error)
+	DriveCreateGoogleDoc(ctx context.Context, name string, content string, parentID string) (any, error)
+	DriveCreateGoogleSheet(ctx context.Context, name string, csvContent string, parentID string) (any, error)
 	YouTubeAnalytics(ctx context.Context, startDate string, endDate string) (any, error)
 	WhatsAppSend(ctx context.Context, to, message string) (any, error)
+	TelegramSend(ctx context.Context, chatID, message string) (any, error)
+	TelegramUpdates(ctx context.Context, offset int, limit int, timeoutSeconds int) (any, error)
+	DiscordWebhookSend(ctx context.Context, content string, username string) (any, error)
 }
 
 // SessionUsecase manages conversation sessions.

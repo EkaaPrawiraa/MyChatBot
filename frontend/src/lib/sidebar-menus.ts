@@ -2,11 +2,14 @@ import {
   MessageSquare,
   LayoutDashboard,
   Activity,
+  FileText,
   Brain,
   Calendar,
   Users,
   Zap,
   Settings,
+  Youtube,
+  Share2,
 } from "lucide-react";
 
 export type SidebarMenuKey =
@@ -16,6 +19,9 @@ export type SidebarMenuKey =
   | "calendar"
   | "planning"
   | "contacts"
+  | "documents"
+  | "youtubeAnalytics"
+  | "social"
   | "memory"
   | "automations"
   | "email"
@@ -53,6 +59,14 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
   { key: "calendar", label: "Calendar", href: "/calendar", icon: Calendar },
   { key: "planning", label: "Planning", href: "/planning", icon: Activity },
   { key: "contacts", label: "Contacts", href: "/contacts", icon: Users },
+  { key: "documents", label: "Documents", href: "/documents", icon: FileText },
+  {
+    key: "youtubeAnalytics",
+    label: "YouTube Analytics",
+    href: "/youtube-analytics",
+    icon: Youtube,
+  },
+  { key: "social", label: "Social", href: "/social", icon: Share2 },
   { key: "memory", label: "Memory", href: "/memory", icon: Brain },
   { key: "automations", label: "Automations", href: "/automations", icon: Zap },
   { key: "email", label: "Email", href: "/email", icon: MessageSquare },
@@ -78,6 +92,9 @@ export const DEFAULT_SIDEBAR_MENUS: Record<SidebarMenuKey, boolean> = {
   calendar: true,
   planning: true,
   contacts: true,
+  documents: true,
+  youtubeAnalytics: true,
+  social: true,
   memory: true,
   automations: true,
   email: true,

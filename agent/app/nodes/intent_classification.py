@@ -42,6 +42,18 @@ async def intent_classification(state: AxisState) -> dict:
     if any(k in msg_lower for k in ("whatsapp", "wa ", " wa", "send whatsapp", "send wa")):
         return {"intent": "TASK_EXECUTION"}
 
+    if (
+        ("google doc" in msg_lower or "gdoc" in msg_lower or "google docs" in msg_lower)
+        and any(k in msg_lower for k in ("create", "make", "write", "new", "generate"))
+    ):
+        return {"intent": "TASK_EXECUTION"}
+
+    if (
+        ("google sheet" in msg_lower or "gsheet" in msg_lower or "google sheets" in msg_lower)
+        and any(k in msg_lower for k in ("create", "make", "new", "generate"))
+    ):
+        return {"intent": "TASK_EXECUTION"}
+
     if any(
         k in msg_lower
         for k in (

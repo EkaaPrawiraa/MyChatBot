@@ -80,19 +80,21 @@ func main() {
 
 	// ---- Handlers ----
 	handlers := router.Handlers{
-		Chat:       handler.NewChatHandler(chatUC),
-		Profile:    handler.NewProfileHandler(profileUC),
-		Session:    handler.NewSessionHandler(sessionUC, memoryUC),
-		Activity:   handler.NewActivityHandler(activityUC),
-		Reminder:   handler.NewReminderHandler(reminderUC),
-		Approval:   handler.NewApprovalHandler(approvalUC),
-		Memory:     handler.NewMemoryHandler(memoryUC),
-		Automation: handler.NewAutomationHandler(automationUC),
-		Internal:   handler.NewInternalHandler(activityRepo, approvalRepo, profileUC, reminderUC),
-		AI:         handler.NewAIHandler(cfg.AI.OrchestratorURL, cfg.App.APIKey),
-		Integrations: handler.NewIntegrationsHandler(integrationsUC, cfg.App.DashboardURL),
-		Tools:        handler.NewToolsHandler(toolsUC, activityRepo),
-		WhatsAppWeb:  handler.NewWhatsAppWebHandler(cfg.WhatsApp.BotURL),
+		Chat:          handler.NewChatHandler(chatUC),
+		Profile:       handler.NewProfileHandler(profileUC),
+		Session:       handler.NewSessionHandler(sessionUC, memoryUC),
+		Activity:      handler.NewActivityHandler(activityUC),
+		Reminder:      handler.NewReminderHandler(reminderUC),
+		Approval:      handler.NewApprovalHandler(approvalUC),
+		Memory:        handler.NewMemoryHandler(memoryUC),
+		Automation:    handler.NewAutomationHandler(automationUC),
+		Internal:      handler.NewInternalHandler(activityRepo, approvalRepo, profileUC, reminderUC),
+		AI:            handler.NewAIHandler(cfg.AI.OrchestratorURL, cfg.App.APIKey),
+		Integrations:  handler.NewIntegrationsHandler(integrationsUC, cfg.App.DashboardURL),
+		Tools:         handler.NewToolsHandler(toolsUC, activityRepo),
+		Documents:     handler.NewDocumentsHandler(cfg.AI.OrchestratorURL, cfg.App.APIKey),
+		WhatsAppWeb:   handler.NewWhatsAppWebHandler(cfg.WhatsApp.BotURL),
+		WhatsAppInbox: handler.NewWhatsAppInboxHandler(toolsUC, cfg.AI.OrchestratorURL, cfg.App.APIKey),
 	}
 
 	// ---- Gin Engine ----

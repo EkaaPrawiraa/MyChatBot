@@ -42,6 +42,11 @@ type OwnerIntegrations struct {
 	WhatsAppBusinessAccountID string `json:"whatsapp_business_account_id" db:"whatsapp_business_account_id"`
 	WhatsAppAPIToken          string `json:"-" db:"whatsapp_api_token"`
 
+	TelegramBotToken string `json:"-" db:"telegram_bot_token"`
+
+	DiscordWebhookURL string `json:"-" db:"discord_webhook_url"`
+	DiscordBotToken   string `json:"-" db:"discord_bot_token"`
+
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -59,6 +64,17 @@ type IntegrationsStatus struct {
 		BusinessAccountID  string `json:"business_account_id"`
 		APITokenMasked     string `json:"api_token_masked"`
 	} `json:"whatsapp"`
+
+	Telegram struct {
+		Configured     bool   `json:"configured"`
+		BotTokenMasked string `json:"bot_token_masked"`
+	} `json:"telegram"`
+
+	Discord struct {
+		Configured        bool   `json:"configured"`
+		WebhookMasked     string `json:"webhook_masked"`
+		BotTokenMasked    string `json:"bot_token_masked"`
+	} `json:"discord"`
 }
 
 // AIKeyMasked returns a masked representation of the API key for display.

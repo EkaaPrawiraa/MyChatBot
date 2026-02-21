@@ -20,9 +20,13 @@ migrate-up:
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000001_init_schema.up.sql
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000002_ai_provider.up.sql
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000003_integrations.up.sql
+	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000004_social_integrations.up.sql
+	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000005_touch_session_on_short_memory_insert.up.sql
 
 migrate-down:
 	@echo "Rolling back migrations..."
+	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000005_touch_session_on_short_memory_insert.down.sql
+	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000004_social_integrations.down.sql
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000003_integrations.down.sql
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000002_ai_provider.down.sql
 	docker exec -i $$(docker compose ps -q postgres) psql -U axis -d axis_assistant < migrations/000001_init_schema.down.sql

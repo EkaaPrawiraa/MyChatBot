@@ -12,12 +12,30 @@ export interface IntegrationsStatus {
     businessAccountId?: string;
     apiTokenMasked?: string;
   };
+  telegram?: {
+    configured: boolean;
+    botTokenMasked?: string;
+  };
+  discord?: {
+    configured: boolean;
+    webhookMasked?: string;
+    botTokenMasked?: string;
+  };
 }
 
 export interface WhatsAppUpsertPayload {
   phone_number_id: string;
   business_account_id?: string;
   api_token: string;
+}
+
+export interface TelegramUpsertPayload {
+  bot_token: string;
+}
+
+export interface DiscordUpsertPayload {
+  webhook_url?: string;
+  bot_token?: string;
 }
 
 export const integrationsService = {
@@ -43,6 +61,36 @@ export const integrationsService = {
   async disconnectWhatsApp(): Promise<{ disconnected: boolean }> {
     return apiClient.post<{ disconnected: boolean }>(
       API_ENDPOINTS.WHATSAPP_DISCONNECT,
+    );
+  },
+
+  async upsertTelegram(
+    payload: TelegramUpsertPayload,
+  ): Promise<IntegrationsStatus> {
+    return apiClient.put<IntegrationsStatus>(
+      API_ENDPOINTS.TELEGRAM_UPSERT,
+      payload,
+    );
+  },
+
+  async disconnectTelegram(): Promise<{ disconnected: boolean }> {
+    return apiClient.post<{ disconnected: boolean }>(
+      API_ENDPOINTS.TELEGRAM_DISCONNECT,
+    );
+  },
+
+  async upsertDiscord(
+    payload: DiscordUpsertPayload,
+  ): Promise<IntegrationsStatus> {
+    return apiClient.put<IntegrationsStatus>(
+      API_ENDPOINTS.DISCORD_UPSERT,
+      payload,
+    );
+  },
+
+  async disconnectDiscord(): Promise<{ disconnected: boolean }> {
+    return apiClient.post<{ disconnected: boolean }>(
+      API_ENDPOINTS.DISCORD_DISCONNECT,
     );
   },
 };

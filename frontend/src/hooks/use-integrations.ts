@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   integrationsService,
   type WhatsAppUpsertPayload,
+  type TelegramUpsertPayload,
+  type DiscordUpsertPayload,
 } from "@/src/services/integrations-service";
 import { QUERY_KEYS } from "@/lib/constants";
 
@@ -38,6 +40,48 @@ export function useDisconnectWhatsApp() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => integrationsService.disconnectWhatsApp(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useUpsertTelegram() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: TelegramUpsertPayload) =>
+      integrationsService.upsertTelegram(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useDisconnectTelegram() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => integrationsService.disconnectTelegram(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useUpsertDiscord() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: DiscordUpsertPayload) =>
+      integrationsService.upsertDiscord(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useDisconnectDiscord() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => integrationsService.disconnectDiscord(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
     },

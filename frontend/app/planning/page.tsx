@@ -9,6 +9,13 @@ import { useActivities } from "@/src/hooks/use-activities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -18,6 +25,33 @@ type PlanStep = {
   success?: boolean;
   error?: string | null;
 };
+
+type FlowCategory =
+  | "all"
+  | "whatsapp"
+  | "gmail"
+  | "calendar"
+  | "contacts"
+  | "drive"
+  | "reminder"
+  | "memory"
+  | "youtube"
+  | "other";
+
+type StatusFilter = "all" | "success" | "failed";
+
+function getFlowCategoryFromTools(tools: string[] | undefined): FlowCategory {
+  const list = (tools || []).map((t) => String(t || "").toLowerCase());
+  if (list.some((t) => t.startsWith("whatsapp."))) return "whatsapp";
+  if (list.some((t) => t.startsWith("gmail."))) return "gmail";
+  if (list.some((t) => t.startsWith("calendar."))) return "calendar";
+  if (list.some((t) => t.startsWith("people."))) return "contacts";
+  if (list.some((t) => t.startsWith("drive."))) return "drive";
+  if (list.some((t) => t.startsWith("reminder."))) return "reminder";
+  if (list.some((t) => t.startsWith("memory."))) return "memory";
+  if (list.some((t) => t.startsWith("youtube."))) return "youtube";
+  return "other";
+}
 
 function safeJsonParse<T>(raw: string | undefined): T | undefined {
   if (!raw) return undefined;
@@ -222,6 +256,8 @@ function PlanView({ raw }: { raw: string }) {
 
 export default function PlanningPage() {
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+  const [flowFilter, setFlowFilter] = React.useState<FlowCategory>("all");
 
   const { data: activities = [], isLoading: isLoadingActivities } =
     useActivities({
@@ -232,6 +268,20 @@ export default function PlanningPage() {
   const planActivities = React.useMemo(() => {
     return (activities || []).filter((a) => Boolean(a.executionPlan));
   }, [activities]);
+
+  const filteredPlanActivities = React.useMemo(() => {
+    return (planActivities || []).filter((a) => {
+      const statusOk =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "success"
+            ? a.success === true
+            : a.success === false;
+      const flow = getFlowCategoryFromTools(a.tools);
+      const flowOk = flowFilter === "all" ? true : flow === flowFilter;
+      return statusOk && flowOk;
+    });
+  }, [planActivities, statusFilter, flowFilter]);
 
   const toggleExpanded = (id: string) => {
     const next = new Set(expandedIds);
@@ -262,19 +312,83 @@ export default function PlanningPage() {
 
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto w-full space-y-4">
+            <Card className="glass-dark">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Filters</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      Status
+                    </span>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+                    >
+                      <SelectTrigger size="sm" className="w-[160px]">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="success">Success</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Flow</span>
+                    <Select
+                      value={flowFilter}
+                      onValueChange={(v) => setFlowFilter(v as FlowCategory)}
+                    >
+                      <SelectTrigger size="sm" className="w-[180px]">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                        <SelectItem value="gmail">Gmail</SelectItem>
+                        <SelectItem value="calendar">Calendar</SelectItem>
+                        <SelectItem value="contacts">Contacts</SelectItem>
+                        <SelectItem value="drive">Drive</SelectItem>
+                        <SelectItem value="reminder">Reminder</SelectItem>
+                        <SelectItem value="memory">Memory</SelectItem>
+                        <SelectItem value="youtube">YouTube</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setFlowFilter("all");
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {isLoadingActivities ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Loading…
               </div>
-            ) : planActivities.length === 0 ? (
+            ) : filteredPlanActivities.length === 0 ? (
               <div className="text-sm text-muted-foreground">
                 No activity plans yet. Once the agent logs activity, plans will
                 appear here.
               </div>
             ) : (
               <div className="space-y-4">
-                {planActivities.map((a) => (
+                {filteredPlanActivities.map((a) => (
                   <Card
                     key={a.id}
                     className="glass-dark transition-colors hover:bg-accent/40"
@@ -284,11 +398,6 @@ export default function PlanningPage() {
                         <div className="flex-1">
                           <CardTitle className="text-base">{a.query}</CardTitle>
                           <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <Badge
-                              variant={a.success ? "secondary" : "destructive"}
-                            >
-                              {a.success ? "Success" : "Failed"}
-                            </Badge>
                             {a.intent ? (
                               <Badge
                                 variant="outline"

@@ -6,6 +6,10 @@ import { useModels } from "@/src/hooks/use-models";
 import {
   useDisconnectGoogle,
   useIntegrationsStatus,
+  useUpsertTelegram,
+  useDisconnectTelegram,
+  useUpsertDiscord,
+  useDisconnectDiscord,
 } from "@/src/hooks/use-integrations";
 import {
   useWhatsAppWebLogout,
@@ -50,6 +54,16 @@ export default function SettingsPage() {
   const { mutate: disconnectGoogle, isPending: isDisconnectingGoogle } =
     useDisconnectGoogle();
 
+  const { mutate: upsertTelegram, isPending: isUpsertingTelegram } =
+    useUpsertTelegram();
+  const { mutate: disconnectTelegram, isPending: isDisconnectingTelegram } =
+    useDisconnectTelegram();
+
+  const { mutate: upsertDiscord, isPending: isUpsertingDiscord } =
+    useUpsertDiscord();
+  const { mutate: disconnectDiscord, isPending: isDisconnectingDiscord } =
+    useDisconnectDiscord();
+
   const {
     data: waStatus,
     isLoading: isLoadingWhatsApp,
@@ -78,6 +92,10 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = React.useState<string>("");
 
   const [waQrNonce, setWaQrNonce] = React.useState(0);
+
+  const [telegramBotToken, setTelegramBotToken] = React.useState("");
+  const [discordWebhookUrl, setDiscordWebhookUrl] = React.useState("");
+  const [discordBotToken, setDiscordBotToken] = React.useState("");
 
   const [peopleQuery, setPeopleQuery] = React.useState("");
   const [peopleResults, setPeopleResults] = React.useState<any>(null);
@@ -198,6 +216,74 @@ export default function SettingsPage() {
       },
       onError: (err) => {
         toast.error(err instanceof Error ? err.message : "Failed to logout");
+      },
+    });
+  };
+
+  const handleSaveTelegram = () => {
+    upsertTelegram(
+      { bot_token: telegramBotToken.trim() },
+      {
+        onSuccess: async () => {
+          toast.success("Telegram configured");
+          setTelegramBotToken("");
+          await refetchIntegrations();
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to configure Telegram",
+          );
+        },
+      },
+    );
+  };
+
+  const handleDisconnectTelegram = () => {
+    disconnectTelegram(undefined, {
+      onSuccess: async () => {
+        toast.success("Telegram disconnected");
+        await refetchIntegrations();
+      },
+      onError: (err) => {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to disconnect Telegram",
+        );
+      },
+    });
+  };
+
+  const handleSaveDiscord = () => {
+    upsertDiscord(
+      {
+        webhook_url: discordWebhookUrl.trim() || undefined,
+        bot_token: discordBotToken.trim() || undefined,
+      },
+      {
+        onSuccess: async () => {
+          toast.success("Discord configured");
+          setDiscordWebhookUrl("");
+          setDiscordBotToken("");
+          await refetchIntegrations();
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to configure Discord",
+          );
+        },
+      },
+    );
+  };
+
+  const handleDisconnectDiscord = () => {
+    disconnectDiscord(undefined, {
+      onSuccess: async () => {
+        toast.success("Discord disconnected");
+        await refetchIntegrations();
+      },
+      onError: (err) => {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to disconnect Discord",
+        );
       },
     });
   };
@@ -815,6 +901,141 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   ) : null}
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Telegram */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Telegram</p>
+                      <p className="text-xs text-muted-foreground">
+                        Configure a bot token to send messages and read inbox
+                        via getUpdates.
+                      </p>
+                    </div>
+                    {integrations?.telegram?.configured ? (
+                      <Button
+                        variant="secondary"
+                        onClick={handleDisconnectTelegram}
+                        disabled={isDisconnectingTelegram}
+                      >
+                        {isDisconnectingTelegram ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Disconnect"
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {integrations?.telegram?.configured ? (
+                    <p className="text-xs text-muted-foreground">
+                      Configured:{" "}
+                      {integrations.telegram.botTokenMasked || "****"}
+                    </p>
+                  ) : (
+                    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+                      <div>
+                        <Label className="text-xs">Bot token</Label>
+                        <Input
+                          value={telegramBotToken}
+                          onChange={(e) => setTelegramBotToken(e.target.value)}
+                          placeholder="123456:ABC..."
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="secondary"
+                          disabled={
+                            isUpsertingTelegram || !telegramBotToken.trim()
+                          }
+                          onClick={handleSaveTelegram}
+                        >
+                          {isUpsertingTelegram ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Discord */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Discord</p>
+                      <p className="text-xs text-muted-foreground">
+                        Easiest option is a webhook URL for manual posting.
+                      </p>
+                    </div>
+                    {integrations?.discord?.configured ? (
+                      <Button
+                        variant="secondary"
+                        onClick={handleDisconnectDiscord}
+                        disabled={isDisconnectingDiscord}
+                      >
+                        {isDisconnectingDiscord ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Disconnect"
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {integrations?.discord?.configured ? (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <div>
+                        Webhook: {integrations.discord.webhookMasked || ""}
+                      </div>
+                      <div>
+                        Bot token: {integrations.discord.botTokenMasked || ""}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+                      <div>
+                        <Label className="text-xs">Webhook URL</Label>
+                        <Input
+                          value={discordWebhookUrl}
+                          onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                          placeholder="https://discord.com/api/webhooks/..."
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Bot token (optional)</Label>
+                        <Input
+                          value={discordBotToken}
+                          onChange={(e) => setDiscordBotToken(e.target.value)}
+                          placeholder="Bot token"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="secondary"
+                          disabled={
+                            isUpsertingDiscord ||
+                            (!discordWebhookUrl.trim() &&
+                              !discordBotToken.trim())
+                          }
+                          onClick={handleSaveDiscord}
+                        >
+                          {isUpsertingDiscord ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-border" />

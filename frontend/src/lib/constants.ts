@@ -43,12 +43,23 @@ export const API_ENDPOINTS = {
   GOOGLE_DISCONNECT: "/api/v1/integrations/google/disconnect",
   WHATSAPP_UPSERT: "/api/v1/integrations/whatsapp",
   WHATSAPP_DISCONNECT: "/api/v1/integrations/whatsapp/disconnect",
+  TELEGRAM_UPSERT: "/api/v1/integrations/telegram",
+  TELEGRAM_DISCONNECT: "/api/v1/integrations/telegram/disconnect",
+  DISCORD_UPSERT: "/api/v1/integrations/discord",
+  DISCORD_DISCONNECT: "/api/v1/integrations/discord/disconnect",
 
   // WhatsApp
   WHATSAPP_SEND: "/api/v1/whatsapp/send",
+  TELEGRAM_SEND: "/api/v1/telegram/send",
+  TELEGRAM_UPDATES: "/api/v1/telegram/updates",
+  DISCORD_WEBHOOK_SEND: "/api/v1/discord/webhook/send",
   WHATSAPP_STATUS: "/api/v1/whatsapp/status",
   WHATSAPP_QR_PNG: "/api/v1/whatsapp/qr.png",
   WHATSAPP_LOGOUT: "/api/v1/whatsapp/logout",
+  WHATSAPP_INBOX: "/api/v1/whatsapp/inbox",
+  WHATSAPP_INBOX_SUGGEST: (id: string) =>
+    `/api/v1/whatsapp/inbox/${id}/suggest`,
+  WHATSAPP_INBOX_SEND: (id: string) => `/api/v1/whatsapp/inbox/${id}/send`,
 
   // Calendar
   CALENDAR_EVENTS: "/api/v1/calendar/events",
@@ -63,6 +74,11 @@ export const API_ENDPOINTS = {
   // Google People / Drive / YouTube
   PEOPLE_SEARCH: "/api/v1/people/search",
   DRIVE_SEARCH: "/api/v1/drive/search",
+  DRIVE_EXPORT: "/api/v1/drive/export",
+  DRIVE_CREATE_TEXT: "/api/v1/drive/create-text",
+  DRIVE_CREATE_DOC: "/api/v1/drive/create-doc",
+  DRIVE_CREATE_SHEET: "/api/v1/drive/create-sheet",
+  DOCUMENTS_SUMMARIZE: "/api/v1/documents/summarize",
   YOUTUBE_ANALYTICS: "/api/v1/youtube/analytics",
 };
 

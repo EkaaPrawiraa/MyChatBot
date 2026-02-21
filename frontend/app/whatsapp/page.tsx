@@ -5,7 +5,6 @@ import { AppSidebar } from "@/src/components/layout/app-sidebar";
 import { SidebarHeaderToggle } from "@/src/components/layout/sidebar-header-toggle";
 import { Footer } from "@/src/components/layout/footer";
 import { ThemeToggle } from "@/src/components/layout/theme-toggle";
-import { useActivities } from "@/src/hooks/use-activities";
 import { useWhatsAppWebStatus } from "@/src/hooks/use-whatsapp-web";
 import apiClient from "@/src/services/api-client";
 import { API_ENDPOINTS } from "@/lib/constants";
@@ -15,32 +14,71 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Textarea } from "@/components/ui/textarea";
+
+type InboxMessage = {
+  id: string;
+  from_jid: string;
+  from_phone: string;
+  contact_name?: string;
+  message: string;
+  timestamp: number;
+  suggested_reply?: string;
+  suggested_at?: string;
+  sent_reply?: string;
+  sent_at?: string;
+};
+
+type InboxResponse = {
+  messages: InboxMessage[];
+};
 
 export default function WhatsAppPage() {
   const { data: waStatus, isLoading: isLoadingIntegrations } =
     useWhatsAppWebStatus(true);
 
-  const { data: activities = [], isLoading: isLoadingActivities } =
-    useActivities({
-      page: 1,
-      pageSize: 50,
-    });
+  const qc = useQueryClient();
+  const inboxQuery = useQuery({
+    queryKey: ["whatsapp", "inbox"],
+    queryFn: () => apiClient.get<InboxResponse>(API_ENDPOINTS.WHATSAPP_INBOX),
+    refetchInterval: 2500,
+  });
+
+  const suggestMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post(API_ENDPOINTS.WHATSAPP_INBOX_SUGGEST(id), {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp", "inbox"] });
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to suggest reply",
+      );
+    },
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: ({ id, message }: { id: string; message: string }) =>
+      apiClient.post(API_ENDPOINTS.WHATSAPP_INBOX_SEND(id), { message }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp", "inbox"] });
+      toast.success("Sent");
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to send reply");
+    },
+  });
 
   const [to, setTo] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
 
-  const waActivities = React.useMemo(() => {
-    return (activities || []).filter((a) =>
-      (a.tools || []).some(
-        (t) => t === "whatsapp.send" || t === "whatsapp.receive",
-      ),
-    );
-  }, [activities]);
-
   const connected = Boolean(waStatus?.connected);
+
+  const messages = inboxQuery.data?.messages ?? [];
+  const isLoadingInbox = inboxQuery.isLoading;
 
   const handleSend = async () => {
     const trimmedTo = to.trim();
@@ -158,36 +196,36 @@ export default function WhatsAppPage() {
             </Card>
 
             <div>
-              <h2 className="text-lg font-semibold mb-3">Recent Activity</h2>
-              {isLoadingActivities ? (
+              <h2 className="text-lg font-semibold mb-3">Inbox</h2>
+              {isLoadingInbox ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading…
                 </div>
-              ) : waActivities.length === 0 ? (
+              ) : messages.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No WhatsApp tool activity yet.
+                  No inbound WhatsApp messages yet.
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {waActivities.map((a) => (
+                  {messages.map((m) => (
                     <Card
-                      key={a.id}
+                      key={m.id}
                       className="glass-dark transition-colors hover:bg-accent/40"
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <CardTitle className="text-base">
-                              {a.query}
+                              {m.contact_name
+                                ? `${m.contact_name} (${m.from_phone || m.from_jid})`
+                                : m.from_phone || m.from_jid}
                             </CardTitle>
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                               <Badge
-                                variant={
-                                  a.success ? "secondary" : "destructive"
-                                }
+                                variant={m.sent_at ? "secondary" : "outline"}
                               >
-                                {a.success ? "Success" : "Failed"}
+                                {m.sent_at ? "Sent" : "Received"}
                               </Badge>
                               <Badge
                                 variant="outline"
@@ -197,23 +235,90 @@ export default function WhatsAppPage() {
                               </Badge>
                             </div>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(a.createdAt), {
-                              addSuffix: true,
-                            })}
-                          </span>
                         </div>
                       </CardHeader>
                       <CardContent className="pt-0">
-                        {a.error ? (
-                          <div className="text-sm text-destructive">
-                            {a.error}
+                        <div>
+                          <div className="text-xs text-muted-foreground">
+                            Message
                           </div>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">
-                            Tools: {(a.tools || []).join(", ")}
+                          <div className="text-sm text-foreground whitespace-pre-wrap break-words">
+                            {m.message}
                           </div>
-                        )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => suggestMutation.mutate(m.id)}
+                            disabled={suggestMutation.isPending}
+                          >
+                            {suggestMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Suggesting
+                              </>
+                            ) : (
+                              "Suggest reply"
+                            )}
+                          </Button>
+                        </div>
+
+                        {m.suggested_reply ? (
+                          <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground">
+                              Suggested reply (edit before sending)
+                            </div>
+                            <Textarea
+                              value={m.suggested_reply}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                qc.setQueryData(
+                                  ["whatsapp", "inbox"],
+                                  (old: InboxResponse | undefined) => {
+                                    if (!old) return old;
+                                    return {
+                                      messages: old.messages.map((x) =>
+                                        x.id === m.id
+                                          ? { ...x, suggested_reply: next }
+                                          : x,
+                                      ),
+                                    };
+                                  },
+                                );
+                              }}
+                              rows={3}
+                            />
+                            <Button
+                              size="sm"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => {
+                                const msgText = (
+                                  m.suggested_reply || ""
+                                ).trim();
+                                if (!msgText) {
+                                  toast.error("Reply cannot be empty");
+                                  return;
+                                }
+                                sendMutation.mutate({
+                                  id: m.id,
+                                  message: msgText,
+                                });
+                              }}
+                              disabled={sendMutation.isPending}
+                            >
+                              {sendMutation.isPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Sending
+                                </>
+                              ) : (
+                                "Send"
+                              )}
+                            </Button>
+                          </div>
+                        ) : null}
                       </CardContent>
                     </Card>
                   ))}

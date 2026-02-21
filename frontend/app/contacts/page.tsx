@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Copy, Loader2 } from "lucide-react";
 
 import { AppSidebar } from "@/src/components/layout/app-sidebar";
 import { SidebarHeaderToggle } from "@/src/components/layout/sidebar-header-toggle";
@@ -33,6 +33,27 @@ function phoneNumbersFromResult(result: unknown): string[] {
   return nums
     .map((n) => n.canonicalForm || n.value)
     .filter((v): v is string => Boolean(v && v.trim()));
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  const value = text.trim();
+  if (!value) return;
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  // Fallback for older/locked-down browsers.
+  const el = document.createElement("textarea");
+  el.value = value;
+  el.setAttribute("readonly", "");
+  el.style.position = "absolute";
+  el.style.left = "-9999px";
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
 }
 
 export default function ContactsPage() {
@@ -170,11 +191,43 @@ export default function ContactsPage() {
                             <div className="text-sm font-medium truncate">
                               {name}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {phones.length
-                                ? phones.join(" • ")
-                                : "No phone number"}
-                            </div>
+
+                            {phones.length ? (
+                              <div className="mt-1 space-y-1">
+                                {phones.map((phone) => (
+                                  <div
+                                    key={phone}
+                                    className="flex items-center justify-between gap-2"
+                                  >
+                                    <div className="text-xs text-muted-foreground truncate">
+                                      {phone}
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-muted-foreground hover:text-foreground"
+                                      onClick={async () => {
+                                        try {
+                                          await copyToClipboard(phone);
+                                          toast.success("Copied");
+                                        } catch {
+                                          toast.error("Copy failed");
+                                        }
+                                      }}
+                                      aria-label={`Copy ${phone}`}
+                                      title="Copy"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                No phone number
+                              </div>
+                            )}
                           </div>
                         );
                       })}

@@ -82,3 +82,43 @@ func (r *ownerIntegrationsRepo) ClearWhatsApp(ctx context.Context) error {
 		WHERE owner_id = 1`)
 	return err
 }
+
+func (r *ownerIntegrationsRepo) UpsertTelegram(ctx context.Context, botToken string) error {
+	query := `
+		UPDATE owner_integrations SET
+			telegram_bot_token = COALESCE(NULLIF($1, ''), telegram_bot_token),
+			updated_at = NOW()
+		WHERE owner_id = 1`
+	_, err := r.db.ExecContext(ctx, query, botToken)
+	return err
+}
+
+func (r *ownerIntegrationsRepo) ClearTelegram(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE owner_integrations SET
+			telegram_bot_token = '',
+			updated_at = NOW()
+		WHERE owner_id = 1`)
+	return err
+}
+
+func (r *ownerIntegrationsRepo) UpsertDiscord(ctx context.Context, webhookURL, botToken string) error {
+	query := `
+		UPDATE owner_integrations SET
+			discord_webhook_url = COALESCE(NULLIF($1, ''), discord_webhook_url),
+			discord_bot_token = COALESCE(NULLIF($2, ''), discord_bot_token),
+			updated_at = NOW()
+		WHERE owner_id = 1`
+	_, err := r.db.ExecContext(ctx, query, webhookURL, botToken)
+	return err
+}
+
+func (r *ownerIntegrationsRepo) ClearDiscord(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE owner_integrations SET
+			discord_webhook_url = '',
+			discord_bot_token = '',
+			updated_at = NOW()
+		WHERE owner_id = 1`)
+	return err
+}

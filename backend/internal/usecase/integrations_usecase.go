@@ -61,6 +61,9 @@ func (u *integrationsUsecase) oauthConfig() (*oauth2.Config, error) {
 		"https://www.googleapis.com/auth/calendar",
 		"https://www.googleapis.com/auth/contacts.readonly",
 		"https://www.googleapis.com/auth/drive.readonly",
+		"https://www.googleapis.com/auth/drive.file",
+		"https://www.googleapis.com/auth/documents",
+		"https://www.googleapis.com/auth/spreadsheets",
 		"https://www.googleapis.com/auth/youtube.readonly",
 		"https://www.googleapis.com/auth/yt-analytics.readonly",
 	}
@@ -152,6 +155,13 @@ func (u *integrationsUsecase) GetStatus(ctx context.Context) (*domain.Integratio
 	status.WhatsApp.BusinessAccountID = integ.WhatsAppBusinessAccountID
 	status.WhatsApp.APITokenMasked = maskSecret(integ.WhatsAppAPIToken)
 
+	status.Telegram.Configured = strings.TrimSpace(integ.TelegramBotToken) != ""
+	status.Telegram.BotTokenMasked = maskSecret(integ.TelegramBotToken)
+
+	status.Discord.Configured = strings.TrimSpace(integ.DiscordWebhookURL) != "" || strings.TrimSpace(integ.DiscordBotToken) != ""
+	status.Discord.WebhookMasked = maskSecret(integ.DiscordWebhookURL)
+	status.Discord.BotTokenMasked = maskSecret(integ.DiscordBotToken)
+
 	return &status, nil
 }
 
@@ -171,4 +181,26 @@ func (u *integrationsUsecase) UpsertWhatsApp(ctx context.Context, phoneNumberID,
 
 func (u *integrationsUsecase) DisconnectWhatsApp(ctx context.Context) error {
 	return u.repo.ClearWhatsApp(ctx)
+}
+
+func (u *integrationsUsecase) UpsertTelegram(ctx context.Context, botToken string) error {
+	if strings.TrimSpace(botToken) == "" {
+		return apperror.Validation("telegram_bot_token is required")
+	}
+	return u.repo.UpsertTelegram(ctx, botToken)
+}
+
+func (u *integrationsUsecase) DisconnectTelegram(ctx context.Context) error {
+	return u.repo.ClearTelegram(ctx)
+}
+
+func (u *integrationsUsecase) UpsertDiscord(ctx context.Context, webhookURL, botToken string) error {
+	if strings.TrimSpace(webhookURL) == "" && strings.TrimSpace(botToken) == "" {
+		return apperror.Validation("discord_webhook_url or discord_bot_token is required")
+	}
+	return u.repo.UpsertDiscord(ctx, webhookURL, botToken)
+}
+
+func (u *integrationsUsecase) DisconnectDiscord(ctx context.Context) error {
+	return u.repo.ClearDiscord(ctx)
 }
