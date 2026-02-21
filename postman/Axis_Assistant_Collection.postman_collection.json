@@ -2,27 +2,26 @@
   "info": {
     "_postman_id": "f0a1b2c3-d4e5-6789-0abc-def123456789",
     "name": "Axis Assistant API",
-    "description": "Full API collection for the Axis Assistant platform.\n\n**Auth:**\n- Public backend endpoints under `/api/v1/*` do **not** require `X-API-Key` by default.\n- Internal backend endpoints under `/api/v1/internal/*` require a **service-to-service** key: `X-API-Key: {{service_api_key}}`.\n- Agent direct endpoints (calling the Python service directly) also require `X-API-Key: {{service_api_key}}`.\n\n**AI provider key:**\n- The user's provider key (e.g., OpenAI) is stored in the owner profile via `PUT /api/v1/profile` as `ai_api_key`.\n- It is masked in public `GET /api/v1/profile` responses.\n\n**Response envelope:**\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"error\": null,\n  \"meta\": { \"request_id\": \"...\", \"timestamp\": \"...\" }\n}\n```\n\n**Error codes follow the grammar:** `<service>.<category>`\n- `backend.*` — Go backend errors\n- `agent.*` — Python agent errors\n- `external.*` — third-party errors\n\n**New in v2:** Voice transcription (Whisper), AI model selection, session message history.",
+    "description": "API collection for the Axis Assistant platform.\n\n**Auth model**\n- **Public (dashboard-facing)** endpoints under `/api/v1/*` do **not** require `X-API-Key`.\n- **Internal (agent → backend)** endpoints under `/api/v1/internal/*` require the service-to-service key: `X-API-Key: {{service_api_key}}`.\n- **Agent direct** calls (calling the Python service directly) also require: `X-API-Key: {{service_api_key}}`.\n\n**Approvals**\nThe product no longer uses a human approval flow. The backend may still expose approval endpoints for legacy/testing, but they are intentionally omitted from this collection to avoid confusion.\n\n**Response envelope**\n```json\n{\n  \"success\": true,\n  \"data\": { },\n  \"error\": null,\n  \"meta\": { \"request_id\": \"...\", \"timestamp\": \"...\" }\n}\n```\n\n**Error codes**\n- `backend.*` — Go backend\n- `agent.*` — Python agent\n- `external.*` — third-party\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": { "type": "noauth" },
-  "variable": [],
   "item": [
     {
       "name": "Health",
+      "description": "Health check endpoints for both services.",
       "item": [
         {
-          "name": "Health Check",
+          "name": "Backend Health Check",
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/health",
               "host": ["{{base_url}}"],
               "path": ["health"]
             },
-            "description": "No auth required. Returns `{\"status\": \"ok\"}` if the backend is running."
+            "description": "No auth required. Returns `{\"status\":\"ok\"}` if the Go backend is running."
           },
           "response": []
         },
@@ -31,21 +30,20 @@
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{agent_url}}/health",
               "host": ["{{agent_url}}"],
               "path": ["health"]
             },
-            "description": "No auth required. Returns `{\"status\": \"ok\"}` from the Python agent."
+            "description": "No auth required. Returns `{\"status\":\"ok\"}` from the Python agent."
           },
           "response": []
         }
-      ],
-      "description": "Health check endpoints for both services."
+      ]
     },
     {
       "name": "Chat",
+      "description": "Chat endpoints — the main conversational interface.",
       "item": [
         {
           "name": "Send Message",
@@ -53,13 +51,13 @@
             {
               "listen": "prerequest",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "// Ensure session_id is set",
                   "if (!pm.environment.get('session_id')) {",
-                  "    console.warn('⚠️ session_id is empty. Create a session first.');",
+                  "  console.warn('⚠️ session_id is empty. Create a session first.');",
                   "}"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
@@ -75,21 +73,20 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "chat"]
             },
-            "description": "Send a message to the AI agent.\n\n**Requires** an active `session_id` — create one via Sessions > Create Session first.\n\nThe Go backend proxies this to the Python agent's `/orchestrate` endpoint. The response includes the AI reply, detected intent, tools used, and latency."
+            "description": "Send a message to the agent via the Go backend proxy.\n\nRequires an active `session_id` (use Sessions > Create Session).\n\nNote: the approval flow is removed, so `requires_approval` should be `false`."
           },
           "response": []
         }
-      ],
-      "description": "Chat endpoints — the main conversational interface."
+      ]
     },
     {
       "name": "Voice (Whisper)",
+      "description": "Voice-to-text transcription using OpenAI Whisper API.",
       "item": [
         {
           "name": "Transcribe Audio",
           "request": {
             "method": "POST",
-            "header": [],
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -106,86 +103,43 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "voice"]
             },
-            "description": "Upload an audio file for speech-to-text transcription using OpenAI Whisper.\n\n**Supported formats:** flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm\n\n**Max file size:** 25 MB\n\n**Requires:** your OpenAI key to be saved in the owner profile as `ai_api_key` (Settings page or `PUT /api/v1/profile`).\n\nThe response contains the transcribed text. You can then send the transcription as a chat message via `POST /api/v1/chat`."
-          },
-          "response": []
-        },
-        {
-          "name": "Transcribe Audio (Agent Direct)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "X-API-Key", "value": "{{service_api_key}}" }],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": "",
-                  "description": "Audio file"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{agent_url}}/voice",
-              "host": ["{{agent_url}}"],
-              "path": ["voice"]
-            },
-            "description": "Call the agent's Whisper endpoint directly (bypassing Go backend).\n\nUseful for debugging."
+            "description": "Upload audio for speech-to-text transcription.\n\nRequires your OpenAI key to be saved to the owner profile via `PUT /api/v1/profile` as `ai_api_key`."
           },
           "response": []
         }
-      ],
-      "description": "Voice-to-text transcription using OpenAI Whisper API.\n\nUpload audio → get transcribed text → send to chat."
+      ]
     },
     {
       "name": "AI Models",
+      "description": "AI model discovery — provider → models.",
       "item": [
         {
           "name": "List Available Models",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/models",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "models"]
-            },
-            "description": "List all supported AI providers and their available models.\n\nReturns a map of provider → model names. Use these values when updating your profile to switch providers/models.\n\n**Providers:** `openai`, `anthropic`, `xai`"
-          },
-          "response": []
-        },
-        {
-          "name": "List Available Models (Agent Direct)",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "X-API-Key", "value": "{{service_api_key}}" }],
-            "url": {
-              "raw": "{{agent_url}}/models",
-              "host": ["{{agent_url}}"],
-              "path": ["models"]
-            },
-            "description": "Call the agent's models endpoint directly."
+            }
           },
           "response": []
         }
-      ],
-      "description": "AI model discovery — see all available providers and models.\n\nUse with Profile > Update Profile to switch your AI engine."
+      ]
     },
     {
       "name": "Profile",
+      "description": "Owner profile (single-user).",
       "item": [
         {
           "name": "Get Profile",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/profile",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "profile"]
-            },
-            "description": "Fetch the owner's profile.\n\nThe `ai_api_key` is **never** returned in plaintext — only a masked version (`ai_api_key_masked`) is included."
+            }
           },
           "response": []
         },
@@ -202,52 +156,15 @@
               "raw": "{{base_url}}/api/v1/profile",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "profile"]
-            },
-            "description": "Update the owner's profile. All fields are optional (PATCH-like behavior).\n\n**AI Provider values:** `openai`, `anthropic`, `xai`\n\nThe `ai_api_key` is stored securely and masked in GET responses."
-          },
-          "response": []
-        },
-        {
-          "name": "Update AI Provider (Anthropic)",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"ai_provider\": \"anthropic\",\n  \"ai_api_key\": \"{{ai_api_key}}\",\n  \"ai_model\": \"claude-sonnet-4-20250514\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "profile"]
-            },
-            "description": "Example: switch to Anthropic Claude."
-          },
-          "response": []
-        },
-        {
-          "name": "Update AI Provider (xAI/Grok)",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"ai_provider\": \"xai\",\n  \"ai_api_key\": \"{{ai_api_key}}\",\n  \"ai_model\": \"grok-3\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "profile"]
-            },
-            "description": "Example: switch to xAI Grok."
+            }
           },
           "response": []
         }
-      ],
-      "description": "Owner profile management. Single owner — always `id = 1`.\n\nSupports switching AI providers (OpenAI, Anthropic, xAI)."
+      ]
     },
     {
       "name": "Sessions",
+      "description": "Create/list/get/close/delete sessions and fetch message history.",
       "item": [
         {
           "name": "Create Session",
@@ -255,6 +172,7 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "pm.test('Save session_id to environment', function () {",
                   "  const json = pm.response.json();",
@@ -263,20 +181,20 @@
                   "    console.log('✅ session_id saved: ' + json.data.id);",
                   "  }",
                   "});"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
             "url": {
               "raw": "{{base_url}}/api/v1/sessions",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "sessions"]
             },
-            "description": "Create a new chat session. No request body needed.\n\nThe returned `id` is automatically saved to the `session_id` environment variable for use in subsequent requests."
+            "description": "Creates a session. Empty JSON body is allowed."
           },
           "response": []
         },
@@ -284,55 +202,38 @@
           "name": "List Sessions",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/sessions?limit=20",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "sessions"],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "20",
-                  "description": "Max sessions to return (default: 20)"
-                }
-              ]
-            },
-            "description": "List recent chat sessions, newest first."
+              "query": [{ "key": "limit", "value": "20" }]
+            }
           },
           "response": []
         },
         {
-          "name": "Get Session by ID",
+          "name": "Get Session",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/sessions/{{session_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "sessions", "{{session_id}}"]
-            },
-            "description": "Fetch a single session by UUID."
+            }
           },
           "response": []
         },
         {
-          "name": "Get Session Messages (History)",
+          "name": "Get Session Messages",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/messages?limit=200",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "sessions", "{{session_id}}", "messages"],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "200",
-                  "description": "Max messages to return (default: 200)"
-                }
-              ]
+              "query": [{ "key": "limit", "value": "200" }]
             },
-            "description": "Fetch the full short-term conversation history for a session (for ChatGPT-style UI rendering)."
+            "description": "Returns the short-term conversation memory so the dashboard can render ChatGPT-style history."
           },
           "response": []
         },
@@ -340,53 +241,54 @@
           "name": "Close Session",
           "request": {
             "method": "POST",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/close",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "sessions", "{{session_id}}", "close"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Session",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}"]
             },
-            "description": "Mark a session as inactive (closed). Returns `204 No Content`."
+            "description": "Deletes a session and its short-term conversation history (FK cascade)."
           },
           "response": []
         }
-      ],
-      "description": "Chat session lifecycle — create, list, get, close."
+      ]
     },
     {
       "name": "Activities",
+      "description": "Execution traces (visualized in the dashboard).",
       "item": [
         {
           "name": "List Activities",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/activities?limit=20&offset=0",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "activities"],
               "query": [
-                {
-                  "key": "limit",
-                  "value": "20",
-                  "description": "Max results (default: 20)"
-                },
-                {
-                  "key": "offset",
-                  "value": "0",
-                  "description": "Pagination offset (default: 0)"
-                }
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
               ]
-            },
-            "description": "List agent execution traces / activity logs.\n\nEach log includes: user query, detected intent, execution plan, tools used, success/failure, latency, and token usage."
+            }
           },
           "response": []
         }
-      ],
-      "description": "Agent execution traces / observability."
+      ]
     },
     {
       "name": "Reminders",
+      "description": "Reminder management — create and list scheduled reminders.",
       "item": [
         {
           "name": "Create Reminder",
@@ -394,6 +296,7 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "pm.test('Save reminder_id to environment', function () {",
                   "  const json = pm.response.json();",
@@ -402,8 +305,7 @@
                   "    console.log('✅ reminder_id saved: ' + json.data.id);",
                   "  }",
                   "});"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
@@ -412,14 +314,13 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Team standup\",\n  \"description\": \"Daily standup meeting at 10 AM\",\n  \"scheduled_at\": \"2026-02-21T10:00:00Z\",\n  \"sent_via\": \"email\"\n}"
+              "raw": "{\n  \"title\": \"Team standup\",\n  \"description\": \"Daily standup meeting\",\n  \"scheduled_at\": \"2026-02-21T10:00:00Z\",\n  \"sent_via\": \"email\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/reminders",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "reminders"]
-            },
-            "description": "Create a scheduled reminder.\n\n`scheduled_at` must be RFC3339 format.\n`sent_via` is optional (email, whatsapp, etc.)."
+            }
           },
           "response": []
         },
@@ -427,108 +328,369 @@
           "name": "List Upcoming Reminders",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/reminders?limit=20",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "reminders"],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "20",
-                  "description": "Max reminders (default: 20)"
-                }
-              ]
-            },
-            "description": "List upcoming (not yet sent) reminders."
+              "query": [{ "key": "limit", "value": "20" }]
+            }
           },
           "response": []
         }
-      ],
-      "description": "Reminder management — create and list scheduled reminders."
+      ]
     },
     {
-      "name": "Approvals",
+      "name": "Integrations",
+      "description": "Google OAuth + WhatsApp configuration.",
       "item": [
         {
-          "name": "Get Pending Approvals",
+          "name": "Status",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
-              "raw": "{{base_url}}/api/v1/approvals",
+              "raw": "{{base_url}}/api/v1/integrations/status",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "approvals"]
-            },
-            "description": "List all pending approval items.\n\nApprovals are created by the agent when a plan has `requires_approval = true` (e.g., sending emails, creating events)."
+              "path": ["api", "v1", "integrations", "status"]
+            }
           },
           "response": []
         },
         {
-          "name": "Approve Plan",
+          "name": "Google Connect (Redirect)",
           "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"feedback\": \"Looks good, proceed.\",\n  \"modified_plan\": null\n}"
-            },
+            "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/v1/approvals/{{approval_id}}/approve",
+              "raw": "{{base_url}}/api/v1/integrations/google/connect",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "approvals", "{{approval_id}}", "approve"]
+              "path": ["api", "v1", "integrations", "google", "connect"]
             },
-            "description": "Approve a pending plan. Optionally provide `feedback` or a `modified_plan` (JSON bytes)."
+            "description": "Starts Google OAuth. This endpoint redirects to Google and sets a short-lived state cookie. Typically used from a browser."
           },
           "response": []
         },
         {
-          "name": "Reject Plan",
+          "name": "Google Disconnect",
           "request": {
             "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/integrations/google/disconnect",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "integrations", "google", "disconnect"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp Upsert",
+          "request": {
+            "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"feedback\": \"Too aggressive, tone it down.\"\n}"
+              "raw": "{\n  \"phone_number_id\": \"{{whatsapp_phone_number_id}}\",\n  \"business_account_id\": \"{{whatsapp_business_account_id}}\",\n  \"api_token\": \"{{whatsapp_api_token}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/approvals/{{approval_id}}/reject",
+              "raw": "{{base_url}}/api/v1/integrations/whatsapp",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "approvals", "{{approval_id}}", "reject"]
+              "path": ["api", "v1", "integrations", "whatsapp"]
             },
-            "description": "Reject a pending plan with feedback."
+            "description": "Stores WhatsApp Cloud API credentials in the backend (masked on reads)."
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp Disconnect",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/integrations/whatsapp/disconnect",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "integrations", "whatsapp", "disconnect"]
+            }
           },
           "response": []
         }
-      ],
-      "description": "Human-in-the-loop approval flow for risky operations."
+      ]
+    },
+    {
+      "name": "Tools (Dashboard-facing)",
+      "description": "Tool endpoints exposed for the dashboard UI.",
+      "item": [
+        {
+          "name": "Gmail: Unread Count",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/gmail/unread?maxResults=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "gmail", "unread"],
+              "query": [{ "key": "maxResults", "value": "50" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Gmail: Search",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/gmail/search?q=is:unread&maxResults=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "gmail", "search"],
+              "query": [
+                { "key": "q", "value": "is:unread" },
+                { "key": "maxResults", "value": "10" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Gmail: Categorized Unread",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/gmail/categorized-unread?maxResults=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "gmail", "categorized-unread"],
+              "query": [{ "key": "maxResults", "value": "10" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Gmail: Send",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"someone@example.com\",\n  \"subject\": \"Hello\",\n  \"body\": \"Hi there!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/gmail/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "gmail", "send"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Calendar: List Events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/calendar/events?timeMin=&timeMax=&maxResults=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "calendar", "events"],
+              "query": [
+                { "key": "timeMin", "value": "" },
+                { "key": "timeMax", "value": "" },
+                { "key": "maxResults", "value": "20" }
+              ]
+            },
+            "description": "Lists calendar events. Provide RFC3339 `timeMin`/`timeMax` for best results."
+          },
+          "response": []
+        },
+        {
+          "name": "Calendar: Create Event",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"summary\": \"Test Event\",\n  \"start\": { \"dateTime\": \"2026-02-21T10:00:00Z\" },\n  \"end\": { \"dateTime\": \"2026-02-21T10:30:00Z\" }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/calendar/events",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "calendar", "events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Calendar: Update Event",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"summary\": \"Updated Event Title\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/calendar/events/{{calendar_event_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "calendar",
+                "events",
+                "{{calendar_event_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Calendar: Delete Event",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/v1/calendar/events/{{calendar_event_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "calendar",
+                "events",
+                "{{calendar_event_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Calendar: FreeBusy",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeMin\": \"2026-02-21T00:00:00Z\",\n  \"timeMax\": \"2026-02-22T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/calendar/freebusy",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "calendar", "freebusy"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "People: Search",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/people/search?q=John&pageSize=10&pageToken=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "people", "search"],
+              "query": [
+                { "key": "q", "value": "John" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "pageToken", "value": "" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Drive: Search",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/drive/search?q=name contains 'report'&pageSize=10&pageToken=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "drive", "search"],
+              "query": [
+                { "key": "q", "value": "name contains 'report'" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "pageToken", "value": "" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "YouTube: Analytics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/youtube/analytics?startDate=2026-02-01&endDate=2026-02-20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "youtube", "analytics"],
+              "query": [
+                { "key": "startDate", "value": "2026-02-01" },
+                { "key": "endDate", "value": "2026-02-20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp: Send (Cloud API)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"+15551234567\",\n  \"message\": \"Hello from Axis Assistant\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/whatsapp/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "whatsapp", "send"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp Web: Status (Local Bot)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/whatsapp/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "whatsapp", "status"]
+            },
+            "description": "Proxies to the local Node WhatsApp bot (Baileys) configured via `WHATSAPP_BOT_URL`."
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp Web: QR PNG (Local Bot)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/whatsapp/qr.png",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "whatsapp", "qr.png"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "WhatsApp Web: Logout (Local Bot)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/whatsapp/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "whatsapp", "logout"]
+            }
+          },
+          "response": []
+        }
+      ]
     },
     {
       "name": "Memory",
+      "description": "Long-term memory search and retrieval (dashboard-facing).",
       "item": [
         {
           "name": "Search Long-Term Memory",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
-              "raw": "{{base_url}}/api/v1/memory/search?q=meeting preferences&limit=10",
+              "raw": "{{base_url}}/api/v1/memory/search?q=meeting%20preferences&limit=10",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "memory", "search"],
               "query": [
-                {
-                  "key": "q",
-                  "value": "meeting preferences",
-                  "description": "Search query (required)"
-                },
-                {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "Max results (default: 10)"
-                }
+                { "key": "q", "value": "meeting preferences" },
+                { "key": "limit", "value": "10" }
               ]
-            },
-            "description": "Search long-term vector memory by semantic similarity.\n\nRequires `q` parameter."
+            }
           },
           "response": []
         },
@@ -536,28 +698,20 @@
           "name": "Get Recent Memories",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/memory/recent?limit=20",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "memory", "recent"],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "20",
-                  "description": "Max results (default: 20)"
-                }
-              ]
-            },
-            "description": "Get recent long-term memory entries, newest first."
+              "query": [{ "key": "limit", "value": "20" }]
+            }
           },
           "response": []
         }
-      ],
-      "description": "Long-term memory search and retrieval (dashboard-facing)."
+      ]
     },
     {
       "name": "Automations",
+      "description": "Automation rules — trigger-based workflows.",
       "item": [
         {
           "name": "Create Automation Rule",
@@ -565,6 +719,7 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "pm.test('Save automation_id to environment', function () {",
                   "  const json = pm.response.json();",
@@ -573,8 +728,7 @@
                   "    console.log('✅ automation_id saved: ' + json.data.id);",
                   "  }",
                   "});"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
@@ -589,8 +743,7 @@
               "raw": "{{base_url}}/api/v1/automations",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "automations"]
-            },
-            "description": "Create a trigger-based automation rule.\n\n`trigger_type` examples: `email_received`, `time_based`, `calendar_event`\n`condition_json` and `action_json` are freeform JSON."
+            }
           },
           "response": []
         },
@@ -598,13 +751,11 @@
           "name": "List Automation Rules",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/automations",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "automations"]
-            },
-            "description": "List all automation rules."
+            }
           },
           "response": []
         },
@@ -621,8 +772,7 @@
               "raw": "{{base_url}}/api/v1/automations/{{automation_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "automations", "{{automation_id}}"]
-            },
-            "description": "Update an automation rule. All fields are optional (PATCH-like)."
+            }
           },
           "response": []
         },
@@ -630,21 +780,19 @@
           "name": "Delete Automation Rule",
           "request": {
             "method": "DELETE",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/automations/{{automation_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "automations", "{{automation_id}}"]
-            },
-            "description": "Delete an automation rule. Returns `204 No Content`."
+            }
           },
           "response": []
         }
-      ],
-      "description": "Automation rules — trigger-based workflows."
+      ]
     },
     {
       "name": "Internal (Agent → Backend)",
+      "description": "Internal endpoints used by the Python agent. These require the service-to-service API key.",
       "auth": {
         "type": "apikey",
         "apikey": [
@@ -658,13 +806,11 @@
           "name": "Get Profile (Internal)",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/internal/profile",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "profile"]
-            },
-            "description": "Used by the Python agent to load the owner profile during context loading.\n\nReturns the full profile including AI provider/model and `ai_api_key` for provider calls. This endpoint is protected by the service-to-service API key."
+            }
           },
           "response": []
         },
@@ -681,8 +827,7 @@
               "raw": "{{base_url}}/api/v1/internal/memory/short-term",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "memory", "short-term"]
-            },
-            "description": "Store a conversation message (short-term memory).\n\nUsed by the agent's memory_update node after each exchange.\n\n`role`: `user`, `assistant`, or `system`"
+            }
           },
           "response": []
         },
@@ -690,7 +835,6 @@
           "name": "Get Conversation (Short-Term)",
           "request": {
             "method": "GET",
-            "header": [],
             "url": {
               "raw": "{{base_url}}/api/v1/internal/memory/short-term/{{session_id}}?limit=50",
               "host": ["{{base_url}}"],
@@ -702,15 +846,8 @@
                 "short-term",
                 "{{session_id}}"
               ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "50",
-                  "description": "Max messages (default: 50)"
-                }
-              ]
-            },
-            "description": "Fetch recent conversation for a session (short-term memory).\n\nUsed by the agent's load_context node."
+              "query": [{ "key": "limit", "value": "50" }]
+            }
           },
           "response": []
         },
@@ -727,8 +864,7 @@
               "raw": "{{base_url}}/api/v1/internal/memory/long-term",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "memory", "long-term"]
-            },
-            "description": "Store a long-term memory entry with vector embedding.\n\nUsed by the agent for MEMORY_WRITE intents."
+            }
           },
           "response": []
         },
@@ -745,8 +881,7 @@
               "raw": "{{base_url}}/api/v1/internal/memory/search",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "memory", "search"]
-            },
-            "description": "Semantic vector search over long-term memory.\n\nUsed by the agent's load_context node to find relevant past knowledge."
+            }
           },
           "response": []
         },
@@ -757,63 +892,13 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_query\": \"What's on my calendar?\",\n  \"intent\": \"QUERY_ONLY\",\n  \"execution_plan\": {\"steps\": []},\n  \"tools_used\": [\"calendar.list\"],\n  \"success\": true,\n  \"latency_ms\": 1250,\n  \"token_usage\": 350\n}"
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_query\": \"What's on my calendar?\",\n  \"intent\": \"QUERY_ONLY\",\n  \"execution_plan\": [],\n  \"tools_used\": [\"calendar.list\"],\n  \"execution_results\": [],\n  \"success\": true,\n  \"latency_ms\": 1250,\n  \"token_usage\": 350\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/internal/activity",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "activity"]
-            },
-            "description": "Log an agent execution trace.\n\nUsed by the agent to record what happened during each interaction."
-          },
-          "response": []
-        },
-        {
-          "name": "Create Approval (Internal)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Save approval_id to environment', function () {",
-                  "  const json = pm.response.json();",
-                  "  if (json.success && json.data && json.data.id) {",
-                  "    pm.environment.set('approval_id', json.data.id);",
-                  "    console.log('✅ approval_id saved: ' + json.data.id);",
-                  "  }",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"proposed_plan\": {\"steps\": [{\"tool\": \"gmail.send\", \"input\": {\"to\": \"boss@company.com\", \"subject\": \"Report\", \"body\": \"Attached.\"}}]}\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/internal/approval",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "internal", "approval"]
-            },
-            "description": "Create an approval request from the agent.\n\nUsed when a plan has `requires_approval = true`."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Approval by ID (Internal)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/v1/internal/approval/{{approval_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "internal", "approval", "{{approval_id}}"]
-            },
-            "description": "Fetch an approval item by ID.\n\nUsed by the agent to check approval status."
           },
           "response": []
         },
@@ -830,16 +915,281 @@
               "raw": "{{base_url}}/api/v1/internal/reminder",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "reminder"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: WhatsApp Inbound (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"+15551234567\",\n  \"message\": \"Hello\",\n  \"message_id\": \"example-id\",\n  \"timestamp\": 1700000000\n}"
             },
-            "description": "Create a reminder from the agent.\n\nUsed when the agent detects the user wants a reminder set."
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/whatsapp/inbound",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "whatsapp", "inbound"]
+            },
+            "description": "Used by the local Node WhatsApp bot to record inbound messages as activities."
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Gmail Unread (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/gmail/unread?maxResults=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "gmail", "unread"],
+              "query": [{ "key": "maxResults", "value": "50" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Gmail Search (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/gmail/search?q=is:unread&maxResults=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "gmail", "search"],
+              "query": [
+                { "key": "q", "value": "is:unread" },
+                { "key": "maxResults", "value": "10" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Gmail Categorized Unread (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/gmail/categorized-unread?maxResults=10",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "tools",
+                "gmail",
+                "categorized-unread"
+              ],
+              "query": [{ "key": "maxResults", "value": "10" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Gmail Send (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"someone@example.com\",\n  \"subject\": \"Hello\",\n  \"body\": \"Hi there!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/gmail/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "gmail", "send"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Calendar List Events (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/calendar/events?timeMin=&timeMax=&maxResults=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "calendar", "events"],
+              "query": [
+                { "key": "timeMin", "value": "" },
+                { "key": "timeMax", "value": "" },
+                { "key": "maxResults", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Calendar Create Event (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"summary\": \"Test Event\",\n  \"start\": { \"dateTime\": \"2026-02-21T10:00:00Z\" },\n  \"end\": { \"dateTime\": \"2026-02-21T10:30:00Z\" }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/calendar/events",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "calendar", "events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Calendar Update Event (Internal)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"summary\": \"Updated Event Title\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/calendar/events/{{calendar_event_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "tools",
+                "calendar",
+                "events",
+                "{{calendar_event_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Calendar Delete Event (Internal)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/calendar/events/{{calendar_event_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "tools",
+                "calendar",
+                "events",
+                "{{calendar_event_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Calendar FreeBusy (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeMin\": \"2026-02-21T00:00:00Z\",\n  \"timeMax\": \"2026-02-22T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/calendar/freebusy",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "calendar", "freebusy"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: People Search (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/people/search?q=John&pageSize=10&pageToken=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "people", "search"],
+              "query": [
+                { "key": "q", "value": "John" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "pageToken", "value": "" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: Drive Search (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/drive/search?q=name contains 'report'&pageSize=10&pageToken=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "drive", "search"],
+              "query": [
+                { "key": "q", "value": "name contains 'report'" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "pageToken", "value": "" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: YouTube Analytics (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/youtube/analytics?startDate=2026-02-01&endDate=2026-02-20",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "tools",
+                "youtube",
+                "analytics"
+              ],
+              "query": [
+                { "key": "startDate", "value": "2026-02-01" },
+                { "key": "endDate", "value": "2026-02-20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: WhatsApp Send (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"+15551234567\",\n  \"message\": \"Hello from Axis Assistant\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/whatsapp/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "whatsapp", "send"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tools: WhatsApp Status (Internal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/tools/whatsapp/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "tools", "whatsapp", "status"]
+            }
           },
           "response": []
         }
-      ],
-      "description": "**Internal endpoints** — used by the Python agent to communicate with the Go backend.\n\nThese are under `/api/v1/internal/*` and are NOT meant for direct frontend use, but you can test them here."
+      ]
     },
     {
       "name": "Agent Direct",
+      "description": "Direct calls to the Python agent — for debugging only.",
       "auth": {
         "type": "apikey",
         "apikey": [
@@ -863,12 +1213,46 @@
               "host": ["{{agent_url}}"],
               "path": ["orchestrate"]
             },
-            "description": "Call the Python agent directly (bypassing the Go backend).\n\nUseful for debugging the agent in isolation.\n\n**Note:** In production, always go through the Go backend via `POST /api/v1/chat`."
+            "description": "Bypasses the Go backend and calls the agent directly."
+          },
+          "response": []
+        },
+        {
+          "name": "Whisper (Direct)",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Audio file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{agent_url}}/voice",
+              "host": ["{{agent_url}}"],
+              "path": ["voice"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Models (Direct)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{agent_url}}/models",
+              "host": ["{{agent_url}}"],
+              "path": ["models"]
+            }
           },
           "response": []
         }
-      ],
-      "description": "Direct calls to the Python agent — for debugging only."
+      ]
     }
   ]
 }
