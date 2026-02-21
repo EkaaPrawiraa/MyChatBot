@@ -14,6 +14,7 @@ export interface ProfileUpdateRequest {
   aiModel?: string;
   aiSkill?: "quick" | "balanced" | "deep";
   sidebarMenus?: Record<string, boolean>;
+  whatsappRequiresApproval?: boolean;
 }
 
 type BackendProfileResponse = {
@@ -28,6 +29,7 @@ type BackendProfileResponse = {
   ai_model: string;
   ai_skill?: "quick" | "balanced" | "deep";
   sidebar_menus?: Record<string, boolean>;
+  whatsapp_requires_approval?: boolean;
   ai_api_key_masked?: string;
   created_at: string;
   updated_at: string;
@@ -46,6 +48,7 @@ function mapProfile(p: BackendProfileResponse): UserProfile {
     aiModel: p.ai_model,
     aiSkill: p.ai_skill,
     sidebarMenus: p.sidebar_menus,
+    whatsappRequiresApproval: p.whatsapp_requires_approval,
     aiApiKeyMasked: p.ai_api_key_masked,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
@@ -75,6 +78,7 @@ export const profileService = {
         ai_model: request.aiModel,
         ai_skill: request.aiSkill,
         sidebar_menus: request.sidebarMenus,
+        whatsapp_requires_approval: request.whatsappRequiresApproval,
       },
     );
     return mapProfile(backend);

@@ -66,7 +66,14 @@ func (u *chatUsecase) SendMessage(ctx context.Context, sessionID uuid.UUID, mess
 	// Agent wraps responses in an envelope: {"success":true,"data":{...},...}
 	var envelope struct {
 		Success bool                 `json:"success"`
-		Data    domain.ChatResponse  `json:"data"`
+		Data    struct {
+			Reply            string          `json:"reply"`
+			Intent           string          `json:"intent,omitempty"`
+			RequiresApproval bool            `json:"requires_approval"`
+			ApprovalID       string          `json:"approval_id,omitempty"`
+			ToolsUsed        json.RawMessage `json:"tools_used,omitempty"`
+			LatencyMs        int             `json:"latency_ms,omitempty"`
+		} `json:"data"`
 		Error   *struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -80,5 +87,20 @@ func (u *chatUsecase) SendMessage(ctx context.Context, sessionID uuid.UUID, mess
 			fmt.Sprintf("orchestrator error: %s — %s", envelope.Error.Code, envelope.Error.Message),
 			http.StatusBadGateway)
 	}
-	return &envelope.Data, nil
+
+	toolsUsed := envelope.Data.ToolsUsed
+	if len(toolsUsed) == 0 || string(toolsUsed) == "null" {
+		toolsUsed = []byte("[]")
+	}
+
+	respData := domain.ChatResponse{
+		Reply:            envelope.Data.Reply,
+		Intent:           envelope.Data.Intent,
+		RequiresApproval: envelope.Data.RequiresApproval,
+		ApprovalID:       envelope.Data.ApprovalID,
+		ToolsUsed:        []byte(toolsUsed),
+		LatencyMs:        envelope.Data.LatencyMs,
+	}
+
+	return &respData, nil
 }

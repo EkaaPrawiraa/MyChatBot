@@ -11,6 +11,7 @@ export interface UserProfile {
   aiModel?: string;
   aiSkill?: "quick" | "balanced" | "deep";
   sidebarMenus?: Record<string, boolean>;
+  whatsappRequiresApproval?: boolean;
   aiApiKeyMasked?: string;
   createdAt: string;
   updatedAt: string;
@@ -93,6 +94,7 @@ export interface ActivityLog {
   error?: string;
   latency: number;
   executionPlan?: string;
+  executionResults?: string;
   createdAt: string;
 }
 
@@ -117,32 +119,6 @@ export interface LongTermMemory {
 export interface MemorySearchResponse {
   memories: LongTermMemory[];
   total: number;
-}
-
-// Approval Types
-export interface ApprovalItem {
-  id: string;
-  sessionId: string;
-  proposedPlan: string;
-  steps: ApprovalStep[];
-  status: "pending" | "approved" | "rejected";
-  feedback?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ApprovalStep {
-  id: string;
-  title: string;
-  description: string;
-  tool: string;
-  parameters: Record<string, unknown>;
-}
-
-export interface ApprovalResponse {
-  id: string;
-  status: "approved" | "rejected";
-  feedback?: string;
 }
 
 // Automation Types

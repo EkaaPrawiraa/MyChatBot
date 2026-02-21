@@ -12,7 +12,7 @@ import json
 import uuid
 from typing import Any
 
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.models.state import AxisState
 from app.services.backend_client import backend

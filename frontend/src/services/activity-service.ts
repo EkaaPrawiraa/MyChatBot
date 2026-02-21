@@ -39,6 +39,9 @@ function mapActivity(a: BackendActivityLog): ActivityLog {
   const executionPlan = a.execution_plan
     ? base64DecodeToUtf8(a.execution_plan)
     : undefined;
+  const executionResults = a.execution_results
+    ? base64DecodeToUtf8(a.execution_results)
+    : undefined;
 
   return {
     id: a.id,
@@ -50,6 +53,7 @@ function mapActivity(a: BackendActivityLog): ActivityLog {
     error: a.error_message,
     latency: a.latency_ms,
     executionPlan,
+    executionResults,
     createdAt: a.created_at,
   };
 }

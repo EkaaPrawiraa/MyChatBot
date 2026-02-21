@@ -4,7 +4,6 @@ import {
   Activity,
   Brain,
   Calendar,
-  CheckCircle,
   Zap,
   Settings,
 } from "lucide-react";
@@ -16,7 +15,6 @@ export type SidebarMenuKey =
   | "calendar"
   | "planning"
   | "memory"
-  | "approvals"
   | "automations"
   | "email"
   | "whatsapp"
@@ -53,12 +51,6 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
   { key: "calendar", label: "Calendar", href: "/calendar", icon: Calendar },
   { key: "planning", label: "Planning", href: "/planning", icon: Activity },
   { key: "memory", label: "Memory", href: "/memory", icon: Brain },
-  {
-    key: "approvals",
-    label: "Approvals",
-    href: "/approvals",
-    icon: CheckCircle,
-  },
   { key: "automations", label: "Automations", href: "/automations", icon: Zap },
   { key: "email", label: "Email", href: "/email", icon: MessageSquare },
   {
@@ -83,7 +75,6 @@ export const DEFAULT_SIDEBAR_MENUS: Record<SidebarMenuKey, boolean> = {
   calendar: true,
   planning: true,
   memory: true,
-  approvals: true,
   automations: true,
   email: true,
   whatsapp: true,

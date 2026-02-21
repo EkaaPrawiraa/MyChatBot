@@ -123,9 +123,17 @@ async def orchestrate(
 
     start = time.time()
 
+    now_utc = datetime.now(timezone.utc)
+    now_local = datetime.now().astimezone()
+
     initial_state = AxisState(
         session_id=req.session_id,
         user_input=req.message,
+        now_utc=now_utc.isoformat(),
+        now_local=now_local.isoformat(),
+        today_local=now_local.date().isoformat(),
+        weekday_local=now_local.strftime("%A"),
+        tz_local=now_local.tzname() or "",
     )
 
     # Run the LangGraph — pass dict so all channel defaults are explicit

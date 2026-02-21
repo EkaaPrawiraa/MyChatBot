@@ -4,12 +4,26 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
-import { Play, Square } from "lucide-react";
+import { Play, Square, Copy, Check } from "lucide-react";
 import { ToolBadge } from "./tool-badge";
 import type { Message } from "@/types";
 
 interface MessageBubbleProps {
   message: Message;
+}
+
+function formatMessageTime(
+  iso: string | undefined,
+): { label: string; title: string } | null {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return null;
+  const label = dt.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const title = dt.toLocaleString();
+  return { label, title };
 }
 
 function toSpeechText(input: string): string {
@@ -75,12 +89,17 @@ function pickBestVoice(
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const time = React.useMemo(
+    () => formatMessageTime(message.createdAt),
+    [message.createdAt],
+  );
   const canSpeak =
     !isUser &&
     typeof window !== "undefined" &&
     "speechSynthesis" in window &&
     typeof window.SpeechSynthesisUtterance !== "undefined";
   const [isSpeaking, setIsSpeaking] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([]);
   const voiceRef = React.useRef<SpeechSynthesisVoice | null>(null);
   const activeRef = React.useRef(false);
@@ -156,12 +175,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     speakChunks(chunks, 0);
   };
 
+  const handleCopy = async () => {
+    const text = (message.content || "").trim();
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // no-op: clipboard may be blocked by browser permissions
+    }
+  };
+
   return (
     <div
       className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4 animate-slide-in`}
     >
       <div
-        className={`max-w-2xl px-4 py-3 rounded-lg ${
+        className={`group relative max-w-2xl px-4 py-3 rounded-lg ${
           isUser ? "message-user" : "message-assistant"
         } min-w-0 break-words`}
       >
@@ -220,44 +252,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   {message.content}
                 </ReactMarkdown>
               </div>
-
-              {canSpeak && (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 shrink-0"
-                  onClick={handleToggleSpeak}
-                  aria-label={isSpeaking ? "Stop audio" : "Play audio"}
-                >
-                  {isSpeaking ? (
-                    <Square className="h-4 w-4" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
             </div>
           )}
         </div>
-
-        {/* Inline send status (user messages only) */}
-        {isUser && message.clientStatus && (
-          <div
-            className={
-              message.clientStatus === "error"
-                ? "mt-2 text-xs text-destructive"
-                : "mt-2 text-xs text-primary-foreground/80"
-            }
-          >
-            {message.clientStatusDetail ||
-              (message.clientStatus === "sending"
-                ? "Sending…"
-                : message.clientStatus === "sent"
-                  ? "Sent"
-                  : "Failed to send")}
-          </div>
-        )}
 
         {/* Bottom Bar - Tools, Intent, Latency */}
         {!isUser &&
@@ -282,6 +279,66 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               )}
             </div>
           )}
+
+        {/* Meta row (timestamp + actions) */}
+        <div
+          className={
+            isUser
+              ? "mt-2 flex items-center gap-2 text-xs text-primary-foreground/80"
+              : "mt-2 flex items-center gap-2 text-xs text-muted-foreground"
+          }
+        >
+          {isUser && message.clientStatus ? (
+            <span
+              className={
+                message.clientStatus === "error" ? "text-destructive" : ""
+              }
+            >
+              {message.clientStatusDetail ||
+                (message.clientStatus === "sending"
+                  ? "Sending…"
+                  : message.clientStatus === "sent"
+                    ? "Sent"
+                    : "Failed to send")}
+            </span>
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`h-7 w-7 ${isUser ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={handleCopy}
+                aria-label={copied ? "Copied" : "Copy message"}
+                title={copied ? "Copied" : "Copy"}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </Button>
+
+              {!isUser && canSpeak ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={handleToggleSpeak}
+                  aria-label={isSpeaking ? "Stop audio" : "Play audio"}
+                  title={isSpeaking ? "Stop" : "Play"}
+                >
+                  {isSpeaking ? (
+                    <Square className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
+
+            {time ? <span title={time.title}>{time.label}</span> : null}
+          </div>
+        </div>
       </div>
     </div>
   );

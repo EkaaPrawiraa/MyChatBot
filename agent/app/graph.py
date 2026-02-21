@@ -20,7 +20,7 @@ from app.nodes.execution import execution
 from app.nodes.memory_update import memory_update
 from app.nodes.response import response_node
 from app.nodes.activity_log import activity_log
-from app.services.backend_client import backend
+
 
 
 # ---------- conditional edges ----------
@@ -33,40 +33,11 @@ def _after_guardrail(state: AxisState) -> str:
 
 
 def _after_plan_validation(state: AxisState) -> str:
-    """Route after plan validation — skip execution if approval needed."""
-    if state.requires_approval and state.guardrail_status == "REQUIRE_APPROVAL":
-        return "approval"
-    if state.requires_approval:
-        return "approval"
-    return "execution"
+    """Route after plan validation.
 
-
-async def _human_approval_node(state: AxisState) -> dict:
-    """Create an approval request in the backend and pause execution.
-
-    The graph returns a response telling the owner that approval is pending.
-    When the owner approves via the dashboard, a separate invocation will
-    resume execution (Phase 2+).
+    Approvals are disabled: execute immediately.
     """
-    import json
-    import uuid
-
-    approval_id = str(uuid.uuid4())
-    try:
-        await backend.create_approval({
-            "id": approval_id,
-            "session_id": state.session_id,
-            "proposed_plan": [s.model_dump() for s in state.plan],
-            "status": "pending",
-        })
-    except Exception as exc:
-        return {
-            "approval_id": approval_id,
-            "error": f"agent.approval_create_failed: {exc}",
-        }
-
-    # Don't execute — jump straight to response.
-    return {"approval_id": approval_id}
+    return "execution"
 
 
 # ---------- build graph ----------
@@ -82,7 +53,6 @@ def build_graph() -> StateGraph:
     graph.add_node("guardrail", guardrail)
     graph.add_node("planning", planning)
     graph.add_node("plan_validation", plan_validation)
-    graph.add_node("approval", _human_approval_node)
     graph.add_node("execution", execution)
     graph.add_node("activity_log", activity_log)
     graph.add_node("response", response_node)
@@ -103,12 +73,8 @@ def build_graph() -> StateGraph:
 
     # Conditional after plan validation
     graph.add_conditional_edges("plan_validation", _after_plan_validation, {
-        "approval": "approval",
         "execution": "execution",
     })
-
-    # Approval → activity log → response (no execution yet)
-    graph.add_edge("approval", "activity_log")
 
     # Execution → activity log → response
     graph.add_edge("execution", "activity_log")

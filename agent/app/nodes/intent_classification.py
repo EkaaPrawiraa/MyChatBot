@@ -6,7 +6,7 @@ that drive downstream routing.
 
 from __future__ import annotations
 
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.errors import CODE_INTENT_FAILED
 from app.models.state import AxisState
@@ -36,6 +36,26 @@ async def intent_classification(state: AxisState) -> dict:
     """Classify user intent via LLM and set state.intent."""
 
     msg_lower = (state.user_input or "").lower()
+
+    # Fast-path heuristics for common operational commands.
+    # This reduces LLM misclassification for tool-driven actions.
+    if any(k in msg_lower for k in ("whatsapp", "wa ", " wa", "send whatsapp", "send wa")):
+        return {"intent": "TASK_EXECUTION"}
+
+    if any(
+        k in msg_lower
+        for k in (
+            "phone number",
+            "contact number",
+            "what's the number",
+            "whats the number",
+            "number of ",
+            "get number",
+            "find number",
+        )
+    ):
+        return {"intent": "QUERY_ONLY"}
+
     if any(
         phrase in msg_lower
         for phrase in (
@@ -65,6 +85,9 @@ async def intent_classification(state: AxisState) -> dict:
     context_str = "\n".join(context_lines) if context_lines else "(no prior context)"
 
     user_content = (
+        f"Current time: {state.now_local or state.now_utc} {('(' + state.tz_local + ')') if state.tz_local else ''}\n"
+        + (f"Today (local): {state.today_local} ({state.weekday_local})\n" if state.today_local else "")
+        +
         f"Conversation context:\n{context_str}\n\n"
         f"Latest message: {state.user_input}"
     )

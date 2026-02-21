@@ -125,8 +125,7 @@ export default function DashboardPage() {
                     </h2>
                     <p className="text-muted-foreground mt-3 max-w-2xl text-base md:text-lg">
                       aXis (X&apos;s) Assistant is your chat-first workspace to
-                      plan, act, and keep context across tools with approvals
-                      for sensitive actions.
+                      plan, act, and keep context across tools.
                     </p>
                     <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="rounded-lg border border-border bg-card/40 p-4">
@@ -144,7 +143,7 @@ export default function DashboardPage() {
                       <div className="rounded-lg border border-border bg-card/40 p-4">
                         <div className="text-sm font-medium">Traceable</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Review Activities and Approvals anytime.
+                          Review Activities anytime.
                         </div>
                       </div>
                     </div>
@@ -167,8 +166,7 @@ export default function DashboardPage() {
                   <CardContent className="p-6 md:p-10 h-full flex flex-col justify-center">
                     <h3 className="text-2xl font-semibold">How to use</h3>
                     <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-                      Start in Chat, then review outcomes and approve actions
-                      when needed.
+                      Start in Chat, then review outcomes in Activities.
                     </p>
 
                     <div className="mt-7 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -189,11 +187,9 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="rounded-lg border border-border bg-card/40 p-4">
-                        <div className="text-sm font-medium">
-                          3) Review & approve
-                        </div>
+                        <div className="text-sm font-medium">3) Review</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Check Activities and Approvals for confirmation.
+                          Check Activities for confirmation.
                         </div>
                       </div>
                     </div>
@@ -289,11 +285,9 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="rounded-lg border border-border bg-card/40 p-4">
-                        <div className="text-sm font-medium">
-                          Better approvals
-                        </div>
+                        <div className="text-sm font-medium">Better safety</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Clearer diffs, context, and safer confirmations.
+                          Clearer context and safer execution.
                         </div>
                       </div>
                       <div className="rounded-lg border border-border bg-card/40 p-4">

@@ -18,7 +18,7 @@ async def load_context(state: AxisState) -> dict:
     # Short-term memory (recent conversation in this session)
     if state.session_id:
         try:
-            resp = await backend.get_short_term(state.session_id, limit=20)
+            resp = await backend.get_short_term(state.session_id, limit=6)
             updates["short_term_memory"] = resp.get("data") or []
         except Exception:
             updates["short_term_memory"] = []

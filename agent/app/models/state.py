@@ -26,6 +26,14 @@ class AxisState(BaseModel):
     session_id: str = ""
     user_input: str = ""
 
+    # Time context (populated at request entrypoint)
+    # These are strings so they serialize cleanly through LangGraph.
+    now_utc: str = ""          # ISO8601, e.g. 2026-02-21T12:34:56+00:00
+    now_local: str = ""        # ISO8601 in server local tz
+    today_local: str = ""      # YYYY-MM-DD
+    weekday_local: str = ""    # e.g. Monday, Tuesday
+    tz_local: str = ""         # e.g. WIB, PST, UTC
+
     # Context (populated by load_context)
     short_term_memory: list[dict[str, Any]] = Field(default_factory=list)
     long_term_memory: list[dict[str, Any]] = Field(default_factory=list)
@@ -44,7 +52,7 @@ class AxisState(BaseModel):
     ] = ""
 
     # Guardrail
-    guardrail_status: Literal["SAFE", "REQUIRE_APPROVAL", "BLOCK", ""] = ""
+    guardrail_status: Literal["SAFE", "BLOCK", ""] = ""
     guardrail_reason: str = ""
 
     # Planning

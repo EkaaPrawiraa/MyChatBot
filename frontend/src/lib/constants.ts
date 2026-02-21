@@ -29,12 +29,6 @@ export const API_ENDPOINTS = {
   MEMORY_SEARCH: "/api/v1/memory/search",
   MEMORY_RECENT: "/api/v1/memory/recent",
 
-  // Approvals
-  APPROVALS: "/api/v1/approvals",
-  APPROVAL: (id: string) => `/api/v1/approvals/${id}`,
-  APPROVE: (id: string) => `/api/v1/approvals/${id}/approve`,
-  REJECT: (id: string) => `/api/v1/approvals/${id}/reject`,
-
   // Automations
   AUTOMATIONS: "/api/v1/automations",
   AUTOMATION: (id: string) => `/api/v1/automations/${id}`,
@@ -85,7 +79,6 @@ export const NAVIGATION_ITEMS = [
   { label: "Chat", href: "/chat", icon: "MessageSquare" },
   { label: "Activities", href: "/activities", icon: "Activity" },
   { label: "Memory", href: "/memory", icon: "Brain" },
-  { label: "Approvals", href: "/approvals", icon: "CheckCircle" },
   { label: "Automations", href: "/automations", icon: "Zap" },
   { label: "Settings", href: "/settings", icon: "Settings" },
 ];
@@ -101,8 +94,6 @@ export const QUERY_KEYS = {
   ACTIVITY: (id: string) => ["activity", id],
   MEMORY_SEARCH: (query: string) => ["memory", "search", query],
   MEMORY_RECENT: ["memory", "recent"],
-  APPROVALS: ["approvals"],
-  APPROVAL: (id: string) => ["approval", id],
   AUTOMATIONS: ["automations"],
   AUTOMATION: (id: string) => ["automation", id],
   REMINDERS: ["reminders"],
@@ -152,8 +143,6 @@ export const TOAST_MESSAGES = {
   AUTOMATION_CREATED: "Automation created successfully",
   AUTOMATION_UPDATED: "Automation updated successfully",
   AUTOMATION_DELETED: "Automation deleted successfully",
-  APPROVAL_APPROVED: "Approval submitted successfully",
-  APPROVAL_REJECTED: "Approval rejected successfully",
   SESSION_CLOSED: "Session closed successfully",
   ERROR_GENERIC: "An error occurred. Please try again.",
   COPY_TO_CLIPBOARD: "Copied to clipboard",

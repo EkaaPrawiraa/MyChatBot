@@ -175,14 +175,30 @@ class TestOrchestrate:
             body = resp.json()
             assert body["data"]["tools_used"] == ["gmail.send", "calendar.create"]
 
-    def test_orchestrate_with_approval(self):
+    class TestIntentClassificationHeuristics:
+        @pytest.mark.asyncio
+        async def test_whatsapp_is_task_execution(self):
+            from app.nodes.intent_classification import intent_classification
+
+            state = AxisState(user_input="send whatsapp to abil say test")
+            result = await intent_classification(state)
+            assert result["intent"] == "TASK_EXECUTION"
+
+        @pytest.mark.asyncio
+        async def test_phone_number_is_query_only(self):
+            from app.nodes.intent_classification import intent_classification
+
+            state = AxisState(user_input="what is the phone number of abil")
+            result = await intent_classification(state)
+            assert result["intent"] == "QUERY_ONLY"
+
+    def test_orchestrate_does_not_require_approval(self):
         with patch("app.main.agent_graph") as mock_graph:
-            approval_id = str(uuid.uuid4())
             mock_graph.ainvoke = AsyncMock(return_value={
-                "final_response": "I need your approval.",
+                "final_response": "Done.",
                 "intent": "TASK_EXECUTION",
-                "requires_approval": True,
-                "approval_id": approval_id,
+                "requires_approval": False,
+                "approval_id": "",
                 "tools_used": [],
             })
             resp = client.post("/orchestrate", json={
@@ -192,8 +208,8 @@ class TestOrchestrate:
 
             assert resp.status_code == 200
             body = resp.json()
-            assert body["data"]["requires_approval"] is True
-            assert body["data"]["approval_id"] == approval_id
+            assert body["data"]["requires_approval"] is False
+            assert body["data"]["approval_id"] == ""
 
     def test_orchestrate_null_response_fallback(self):
         """If final_response is None, should use fallback."""
@@ -616,7 +632,7 @@ class TestPlanningNode:
             result = await planning(state)
             assert len(result["plan"]) == 1
             assert result["plan"][0].tool == "gmail.send"
-            assert result["requires_approval"] is True
+            assert result["requires_approval"] is False
 
 
 class TestPlanValidationNode:
@@ -626,10 +642,15 @@ class TestPlanValidationNode:
 
         state = AxisState(plan=[
             PlanStep(tool="gmail.send"),
+            PlanStep(tool="gmail.categorized_unread"),
             PlanStep(tool="calendar.create"),
+            PlanStep(tool="calendar.delete"),
+            PlanStep(tool="people.search"),
+            PlanStep(tool="drive.search"),
+            PlanStep(tool="youtube.analytics"),
         ])
         result = await plan_validation(state)
-        assert len(result["plan"]) == 2
+        assert len(result["plan"]) == 7
 
     @pytest.mark.asyncio
     async def test_invalid_tools_removed(self):
@@ -652,7 +673,7 @@ class TestPlanValidationNode:
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_whatsapp_sensitive_message_requires_approval(self):
+    async def test_whatsapp_sensitive_message_does_not_force_approval(self):
         from app.nodes.plan_validation import plan_validation
 
         state = AxisState(
@@ -667,8 +688,8 @@ class TestPlanValidationNode:
         )
 
         result = await plan_validation(state)
-        assert result["requires_approval"] is True
-        assert result["guardrail_status"] == "REQUIRE_APPROVAL"
+        assert "requires_approval" not in result
+        assert "guardrail_status" not in result
 
     @pytest.mark.asyncio
     async def test_whatsapp_normal_message_does_not_force_approval(self):

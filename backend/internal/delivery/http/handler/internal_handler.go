@@ -125,15 +125,17 @@ func (h *InternalHandler) GetProfile(c *gin.Context) {
 	// required for agent execution.
 	type internalProfileResponse struct {
 		*domain.OwnerProfile
-		AIAPIKey     string          `json:"ai_api_key"`
-		AISkill      string          `json:"ai_skill"`
-		SidebarMenus map[string]bool `json:"sidebar_menus"`
+		AIAPIKey                 string          `json:"ai_api_key"`
+		AISkill                  string          `json:"ai_skill"`
+		SidebarMenus             map[string]bool `json:"sidebar_menus"`
+		WhatsAppRequiresApproval bool            `json:"whatsapp_requires_approval"`
 	}
 	response.OK(c, internalProfileResponse{
-		OwnerProfile: profile,
-		AIAPIKey:     profile.AIAPIKey,
-		AISkill:      getAISkillFromPreferences(profile.Preferences),
-		SidebarMenus: getSidebarMenusFromPreferences(profile.Preferences),
+		OwnerProfile:             profile,
+		AIAPIKey:                 profile.AIAPIKey,
+		AISkill:                  getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus:             getSidebarMenusFromPreferences(profile.Preferences),
+		WhatsAppRequiresApproval: getWhatsAppRequiresApprovalFromPreferences(profile.Preferences),
 	})
 }
 

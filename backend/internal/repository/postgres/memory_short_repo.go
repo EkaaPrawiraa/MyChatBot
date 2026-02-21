@@ -34,12 +34,20 @@ func (r *shortTermMemoryRepo) Store(ctx context.Context, m *domain.ShortTermMemo
 
 func (r *shortTermMemoryRepo) GetBySession(ctx context.Context, sessionID uuid.UUID, limit int) ([]domain.ShortTermMemory, error) {
 	msgs := make([]domain.ShortTermMemory, 0)
+	// IMPORTANT:
+	// We want the *most recent* messages for context, but in chronological order
+	// (oldest → newest) so the LLM reads naturally. To do that, we fetch DESC
+	// with a LIMIT, then re-sort ASC in an outer query.
 	query := `
 		SELECT id, session_id, role, message, metadata, created_at
-		FROM conversation_memory_short
-		WHERE session_id = $1
-		ORDER BY created_at ASC
-		LIMIT $2`
+		FROM (
+			SELECT id, session_id, role, message, metadata, created_at
+			FROM conversation_memory_short
+			WHERE session_id = $1
+			ORDER BY created_at DESC
+			LIMIT $2
+		) recent
+		ORDER BY created_at ASC`
 	err := r.db.SelectContext(ctx, &msgs, query, sessionID, limit)
 	return msgs, err
 }

@@ -57,6 +57,33 @@ func getSidebarMenusFromPreferences(preferencesJSON []byte) map[string]bool {
 	return out
 }
 
+func getWhatsAppRequiresApprovalFromPreferences(preferencesJSON []byte) bool {
+	// Default to requiring approval (safe-by-default).
+	prefs, _ := parseOwnerPreferences(preferencesJSON)
+	if prefs == nil {
+		return true
+	}
+	if v, ok := prefs["whatsapp_requires_approval"]; ok {
+		b, ok := v.(bool)
+		if ok {
+			return b
+		}
+	}
+	return true
+}
+
+func setWhatsAppRequiresApprovalInPreferences(preferencesJSON []byte, requiresApproval bool) ([]byte, error) {
+	prefs, err := parseOwnerPreferences(preferencesJSON)
+	if err != nil {
+		return nil, err
+	}
+	if prefs == nil {
+		prefs = ownerPreferences{}
+	}
+	prefs["whatsapp_requires_approval"] = requiresApproval
+	return json.Marshal(prefs)
+}
+
 func setSidebarMenusInPreferences(preferencesJSON []byte, menus map[string]bool) ([]byte, error) {
 	prefs, err := parseOwnerPreferences(preferencesJSON)
 	if err != nil {

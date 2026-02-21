@@ -15,7 +15,11 @@ from app.models.state import AxisState
 # Whitelist of valid tool names.
 _VALID_TOOLS = {
     "gmail.search", "gmail.send", "gmail.unread",
-    "calendar.list", "calendar.create", "calendar.update", "calendar.availability",
+    "gmail.categorized_unread",
+    "calendar.list", "calendar.create", "calendar.update", "calendar.delete", "calendar.availability",
+    "people.search",
+    "drive.search",
+    "youtube.analytics",
     "whatsapp.send",
     "reminder.create",
     "memory.store",
@@ -56,7 +60,6 @@ async def plan_validation(state: AxisState) -> dict:
         return {}
 
     validated: list = []
-    requires_approval = bool(state.requires_approval)
     guardrail_status = state.guardrail_status
     guardrail_reason = state.guardrail_reason
 
@@ -65,18 +68,9 @@ async def plan_validation(state: AxisState) -> dict:
             step.success = False
             step.error = f"unknown tool: {step.tool}"
         else:
-            if step.tool == "whatsapp.send":
-                message = str((step.input or {}).get("message") or (step.input or {}).get("body") or "")
-                if _whatsapp_message_needs_approval(message):
-                    requires_approval = True
-                    if guardrail_status != "BLOCK":
-                        guardrail_status = "REQUIRE_APPROVAL"
-                        guardrail_reason = "WhatsApp message looks sensitive/inappropriate; awaiting your approval before sending."
             validated.append(step)
 
     out: dict = {"plan": validated}
-    if requires_approval != state.requires_approval:
-        out["requires_approval"] = requires_approval
     if guardrail_status and guardrail_status != state.guardrail_status:
         out["guardrail_status"] = guardrail_status
     if guardrail_reason and guardrail_reason != state.guardrail_reason:

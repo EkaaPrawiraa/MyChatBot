@@ -1,28 +1,39 @@
 """Node 3 — Safety & Guardrail Check.
 
 Scans the user message and the generated plan for dangerous actions.
-Outputs one of: SAFE, REQUIRE_APPROVAL, BLOCK.
+Outputs one of: SAFE, BLOCK.
 """
 
 from __future__ import annotations
 
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.errors import CODE_GUARDRAIL_BLOCKED, CODE_LLM_ERROR
 from app.models.state import AxisState
 from app.services.llm_factory import create_llm
+
+
+def _to_bool(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "y", "on"):
+            return True
+        if v in ("false", "0", "no", "n", "off"):
+            return False
+    return default
 
 _SYSTEM_PROMPT = """\
 You are a safety guardrail for the Axis Assistant, a personal AI agent.
 Given the user's message, intent, and any proposed plan steps, evaluate safety.
 
 Respond in this exact format (two lines):
-STATUS: <SAFE|REQUIRE_APPROVAL|BLOCK>
+STATUS: <SAFE|BLOCK>
 REASON: <brief explanation>
 
 Rules:
-- It's Okay to be offensive and using inappropriate language.
-- REQUIRE_APPROVAL: If the request involves destructive actions (mass delete, mass send),
+- BLOCK: If the request involves destructive actions (mass delete, mass send),
   sensitive data exposure, financial transactions, or anything with irreversible side effects.
 - SAFE: Normal requests with no safety concerns.
 """
@@ -44,7 +55,13 @@ async def guardrail(state: AxisState) -> dict:
     try:
         response = await llm.ainvoke([
             SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=f"Intent: {state.intent}\nMessage: {state.user_input}"),
+            HumanMessage(content=(
+                f"Current time: {state.now_local or state.now_utc} {('(' + state.tz_local + ')') if state.tz_local else ''}\n"
+                + (f"Today (local): {state.today_local} ({state.weekday_local})\n" if state.today_local else "")
+                +
+                f"Intent: {state.intent}\n"
+                f"Message: {state.user_input}"
+            )),
         ])
     except Exception as exc:
         # If guardrail LLM fails, default to SAFE so the pipeline can continue.
@@ -63,7 +80,7 @@ async def guardrail(state: AxisState) -> dict:
         elif line.upper().startswith("REASON:"):
             reason_line = line.split(":", 1)[1].strip()
 
-    valid_statuses = {"SAFE", "REQUIRE_APPROVAL", "BLOCK"}
+    valid_statuses = {"SAFE", "BLOCK"}
     return {
         "guardrail_status": status_line if status_line in valid_statuses else "SAFE",
         "guardrail_reason": reason_line,

@@ -12,6 +12,211 @@ import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { Loader2, ChevronDown } from "lucide-react";
 
+type ExecutionStep = {
+  tool?: string;
+  input?: any;
+  result?: any;
+  success?: boolean;
+  error?: string | null;
+};
+
+function safeJsonParse<T>(raw: string | undefined): T | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function prettyJson(raw: string | undefined): string {
+  if (!raw) return "";
+  const parsed = safeJsonParse<unknown>(raw);
+  if (!parsed) return raw;
+  return JSON.stringify(parsed, null, 2);
+}
+
+function formatDateTime(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toLocaleString();
+}
+
+function summarizeStep(step: ExecutionStep): {
+  title: string;
+  lines: string[];
+} {
+  const tool = String(step.tool || "(unknown tool)");
+  const input = step.input || {};
+  const result = step.result || {};
+
+  if (tool === "whatsapp.send") {
+    const to = typeof input.to === "string" ? input.to : "";
+    const message = typeof input.message === "string" ? input.message : "";
+    const ok = typeof result.ok === "boolean" ? result.ok : undefined;
+    return {
+      title: "WhatsApp message",
+      lines: [
+        to ? `To: ${to}` : "",
+        message ? `Message: ${message}` : "",
+        ok === true ? "Result: sent" : ok === false ? "Result: failed" : "",
+      ].filter(Boolean),
+    };
+  }
+
+  if (tool === "calendar.list") {
+    const timeMin = typeof input.time_min === "string" ? input.time_min : "";
+    const timeMax = typeof input.time_max === "string" ? input.time_max : "";
+    const items = Array.isArray(result.items) ? result.items : [];
+    const firstSummary =
+      items.length > 0 && typeof items[0]?.summary === "string"
+        ? String(items[0].summary)
+        : "";
+    return {
+      title: "Calendar events",
+      lines: [
+        timeMin && timeMax
+          ? `Range: ${formatDateTime(timeMin)} → ${formatDateTime(timeMax)}`
+          : "",
+        `Found: ${items.length} event(s)`,
+        firstSummary ? `First: ${firstSummary}` : "",
+      ].filter(Boolean),
+    };
+  }
+
+  if (tool === "gmail.send") {
+    const to = typeof input.to === "string" ? input.to : "";
+    const subject = typeof input.subject === "string" ? input.subject : "";
+    return {
+      title: "Send email",
+      lines: [
+        to ? `To: ${to}` : "",
+        subject ? `Subject: ${subject}` : "",
+      ].filter(Boolean),
+    };
+  }
+
+  if (tool.startsWith("calendar.")) {
+    const summary = typeof input.summary === "string" ? input.summary : "";
+    const start = typeof input.start === "string" ? input.start : "";
+    const end = typeof input.end === "string" ? input.end : "";
+    return {
+      title: tool,
+      lines: [
+        summary ? `Title: ${summary}` : "",
+        start ? `Start: ${formatDateTime(start)}` : "",
+        end ? `End: ${formatDateTime(end)}` : "",
+      ].filter(Boolean),
+    };
+  }
+
+  return {
+    title: tool,
+    lines: [],
+  };
+}
+
+function ExecutionResultsView({ raw }: { raw: string }) {
+  const steps = safeJsonParse<ExecutionStep[]>(raw);
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    return (
+      <pre className="bg-muted border border-border rounded p-3 text-xs overflow-x-auto text-foreground">
+        {prettyJson(raw)}
+      </pre>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Simple flow graph */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-2">Flow</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {steps.map((s, idx) => (
+            <React.Fragment key={`${String(s.tool)}-${idx}`}>
+              <Badge variant="secondary" className="text-xs">
+                {s.tool || "(unknown)"}
+              </Badge>
+              {idx < steps.length - 1 ? (
+                <span className="text-xs text-muted-foreground">→</span>
+              ) : null}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* Step cards */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-2">Steps</p>
+        <div className="space-y-2">
+          {steps.map((s, idx) => {
+            const ok = s.success === true;
+            const failed = s.success === false;
+            const { title, lines } = summarizeStep(s);
+
+            return (
+              <div
+                key={`${String(s.tool)}-${idx}-card`}
+                className="rounded-lg border border-border bg-accent px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-medium truncate">
+                        {title}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {s.tool}
+                      </span>
+                    </div>
+                    {lines.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        {lines.map((ln) => (
+                          <div
+                            key={ln}
+                            className="text-xs text-muted-foreground"
+                          >
+                            {ln}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {s.error ? (
+                      <div className="mt-2 text-xs text-red-400">{s.error}</div>
+                    ) : null}
+                  </div>
+                  <Badge
+                    variant={
+                      ok ? "secondary" : failed ? "destructive" : "outline"
+                    }
+                    className={ok ? "" : failed ? "" : "border-primary/30"}
+                  >
+                    {ok ? "Success" : failed ? "Failed" : "Unknown"}
+                  </Badge>
+                </div>
+
+                {/* Raw payload fallback (still useful for debugging) */}
+                <details className="mt-3">
+                  <summary className="text-xs text-muted-foreground cursor-pointer select-none">
+                    Raw JSON
+                  </summary>
+                  <pre className="mt-2 bg-muted border border-border rounded p-3 text-xs overflow-x-auto text-foreground">
+                    {prettyJson(JSON.stringify(s))}
+                  </pre>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ActivitiesPage() {
   const [page, setPage] = React.useState(1);
   const pageSize = 20;
@@ -52,13 +257,7 @@ export default function ActivitiesPage() {
     setExpandedIds(newSet);
   };
 
-  const formatExecutionPlan = (raw: string) => {
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return raw;
-    }
-  };
+  const formatExecutionPlan = (raw: string) => prettyJson(raw);
 
   return (
     <div className="flex h-screen">
@@ -158,6 +357,17 @@ export default function ActivitiesPage() {
                               </Badge>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {activity.executionResults && (
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">
+                            Execution Results
+                          </p>
+                          <ExecutionResultsView
+                            raw={activity.executionResults}
+                          />
                         </div>
                       )}
 

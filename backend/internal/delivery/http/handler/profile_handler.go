@@ -18,9 +18,10 @@ func NewProfileHandler(uc domain.ProfileUsecase) *ProfileHandler {
 // AIAPIKey is never exposed; we include a masked version instead.
 type profileResponse struct {
 	*domain.OwnerProfile
-	AIAPIKeyMasked string          `json:"ai_api_key_masked"`
-	AISkill        string          `json:"ai_skill"`
-	SidebarMenus   map[string]bool `json:"sidebar_menus"`
+	AIAPIKeyMasked           string          `json:"ai_api_key_masked"`
+	AISkill                  string          `json:"ai_skill"`
+	SidebarMenus             map[string]bool `json:"sidebar_menus"`
+	WhatsAppRequiresApproval bool            `json:"whatsapp_requires_approval"`
 }
 
 // Get handles GET /api/v1/profile
@@ -31,25 +32,27 @@ func (h *ProfileHandler) Get(c *gin.Context) {
 		return
 	}
 	response.OK(c, profileResponse{
-		OwnerProfile:   profile,
-		AIAPIKeyMasked: profile.AIKeyMasked(),
-		AISkill:        getAISkillFromPreferences(profile.Preferences),
-		SidebarMenus:   getSidebarMenusFromPreferences(profile.Preferences),
+		OwnerProfile:             profile,
+		AIAPIKeyMasked:           profile.AIKeyMasked(),
+		AISkill:                  getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus:             getSidebarMenusFromPreferences(profile.Preferences),
+		WhatsAppRequiresApproval: getWhatsAppRequiresApprovalFromPreferences(profile.Preferences),
 	})
 }
 
 type updateProfileRequest struct {
-	Name                  *string         `json:"name"`
-	Email                 *string         `json:"email"`
-	PreferredMeetingHours *string         `json:"preferred_meeting_hours"`
-	FocusHours            *string         `json:"focus_hours"`
-	CommunicationStyle    *string         `json:"communication_style"`
-	WorkPattern           *string         `json:"work_pattern"`
-	AIProvider            *string         `json:"ai_provider"`
-	AIAPIKey              *string         `json:"ai_api_key"`
-	AIModel               *string         `json:"ai_model"`
-	AISkill               *string         `json:"ai_skill"`
-	SidebarMenus          map[string]bool `json:"sidebar_menus"`
+	Name                     *string         `json:"name"`
+	Email                    *string         `json:"email"`
+	PreferredMeetingHours    *string         `json:"preferred_meeting_hours"`
+	FocusHours               *string         `json:"focus_hours"`
+	CommunicationStyle       *string         `json:"communication_style"`
+	WorkPattern              *string         `json:"work_pattern"`
+	AIProvider               *string         `json:"ai_provider"`
+	AIAPIKey                 *string         `json:"ai_api_key"`
+	AIModel                  *string         `json:"ai_model"`
+	AISkill                  *string         `json:"ai_skill"`
+	SidebarMenus             map[string]bool `json:"sidebar_menus"`
+	WhatsAppRequiresApproval *bool           `json:"whatsapp_requires_approval"`
 }
 
 // Update handles PUT /api/v1/profile
@@ -142,6 +145,14 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 		}
 		profile.Preferences = prefs
 	}
+	if req.WhatsAppRequiresApproval != nil {
+		prefs, err := setWhatsAppRequiresApprovalInPreferences(profile.Preferences, *req.WhatsAppRequiresApproval)
+		if err != nil {
+			response.BadRequest(c, "invalid preferences")
+			return
+		}
+		profile.Preferences = prefs
+	}
 
 	if err := h.uc.UpdateProfile(c.Request.Context(), profile); err != nil {
 		mapDomainError(c, err)
@@ -149,9 +160,10 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	}
 
 	response.OK(c, profileResponse{
-		OwnerProfile:   profile,
-		AIAPIKeyMasked: profile.AIKeyMasked(),
-		AISkill:        getAISkillFromPreferences(profile.Preferences),
-		SidebarMenus:   getSidebarMenusFromPreferences(profile.Preferences),
+		OwnerProfile:             profile,
+		AIAPIKeyMasked:           profile.AIKeyMasked(),
+		AISkill:                  getAISkillFromPreferences(profile.Preferences),
+		SidebarMenus:             getSidebarMenusFromPreferences(profile.Preferences),
+		WhatsAppRequiresApproval: getWhatsAppRequiresApprovalFromPreferences(profile.Preferences),
 	})
 }

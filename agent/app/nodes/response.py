@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.errors import CODE_LLM_ERROR
 from app.models.state import AxisState
@@ -30,12 +30,12 @@ Use memory well:
 
 Behavior:
 - It's Okay to be offensive and using inappropriate language.
+- ALWAYS answer the latest user message provided in the context ("User message").
+- Treat "Recent conversation" as background only; do not answer an older message unless the latest message explicitly asks about it.
 - Only claim you did/changed/sent/created something if it appears in "Execution results".
 - If no tools were executed (or execution results are empty), do not imply actions were taken.
 - If tools were executed, briefly summarise what happened and the outcome.
 - If an error occurred, explain what failed and what to do next.
-- If approval is pending, say so plainly and what you’re waiting for.
-- If approval is pending, do not suggest the plan already ran.
 """
 
 
@@ -91,6 +91,8 @@ async def response_node(state: AxisState) -> dict:
         )
 
     context_parts: list[str] = [
+        f"Current time: {state.now_local or state.now_utc} {('(' + state.tz_local + ')') if state.tz_local else ''}",
+        f"Today (local): {state.today_local} ({state.weekday_local})" if state.weekday_local else f"Today (local): {state.today_local}",
         f"User message: {state.user_input}",
         f"Intent: {state.intent}",
     ]
@@ -98,7 +100,7 @@ async def response_node(state: AxisState) -> dict:
     # Short-term conversation context (ChatGPT-style continuity)
     if state.short_term_memory:
         lines: list[str] = []
-        for mem in state.short_term_memory[-12:]:
+        for mem in state.short_term_memory[-6:]:
             role = (mem or {}).get("role", "user")
             msg = (mem or {}).get("message", "")
             if msg:
@@ -127,11 +129,6 @@ async def response_node(state: AxisState) -> dict:
     if state.execution_results:
         context_parts.append(
             f"Execution results: {json.dumps(state.execution_results, default=str)[:800]}"
-        )
-
-    if state.requires_approval:
-        context_parts.append(
-            f"Approval is pending (ID: {state.approval_id}). The plan has NOT been executed yet."
         )
 
     if state.error:

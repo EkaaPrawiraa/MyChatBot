@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.errors import CODE_PLANNING_FAILED
 from app.models.state import AxisState, PlanStep
@@ -62,15 +62,36 @@ Respond ONLY with valid JSON:
 {
   "steps": [
     {"tool": "tool_name", "input": {"key": "value"}}
-  ],
-  "requires_approval": true/false
+    ]
 }
 
-Set requires_approval = true for emails being sent, calendar events created/updated/deleted, or any destructive action.
+Approvals are disabled in this system. Do NOT ask for or require approvals.
 If the intent is CHAT, return an empty steps array.
-If the intent is QUERY_ONLY, you MAY return read-only tool steps (gmail.unread/search, calendar.list/availability) when helpful.
+If the intent is QUERY_ONLY, you MAY return read-only tool steps when helpful (gmail.unread/search/categorized_unread, calendar.list/availability, people.search, drive.search, youtube.analytics).
 If the intent is MEMORY_WRITE, you MUST return exactly one step using memory.store.
 """
+
+
+def _to_bool(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "y", "on"):
+            return True
+        if v in ("false", "0", "no", "n", "off"):
+            return False
+    return default
+
+
+def _compute_requires_approval(
+    steps: list[PlanStep],
+    *,
+    whatsapp_requires_approval: bool,
+    guardrail_status: str,
+) -> bool:
+    # Approvals are disabled; always execute immediately.
+    return False
 
 
 async def planning(state: AxisState) -> dict:
@@ -84,7 +105,10 @@ async def planning(state: AxisState) -> dict:
     if state.intent == "QUERY_ONLY":
         msg_lower = (state.user_input or "").lower()
         if any(k in msg_lower for k in ("meeting", "calendar", "schedule", "event", "appointment")):
-            now = datetime.now().astimezone()
+            try:
+                now = datetime.fromisoformat(state.now_local) if state.now_local else datetime.now().astimezone()
+            except Exception:
+                now = datetime.now().astimezone()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=1)
             return {
@@ -103,6 +127,7 @@ async def planning(state: AxisState) -> dict:
 
     owner_profile = state.owner_profile or {}
     ai_skill = str(owner_profile.get("ai_skill") or "").strip().lower()
+    whatsapp_requires_approval = _to_bool(owner_profile.get("whatsapp_requires_approval"), True)
 
     max_tokens = 500
     skill_prompt = ""
@@ -133,7 +158,7 @@ async def planning(state: AxisState) -> dict:
     profile_snippet = json.dumps(state.owner_profile, default=str)[:400] if state.owner_profile else "{}"
 
     recent_lines: list[str] = []
-    for mem in (state.short_term_memory or [])[-8:]:
+    for mem in (state.short_term_memory or [])[-6:]:
         role = (mem or {}).get("role", "user")
         msg = (mem or {}).get("message", "")
         if msg:
@@ -147,11 +172,17 @@ async def planning(state: AxisState) -> dict:
             long_term_lines.append(f"- ({category}) {content}" if category else f"- {content}")
 
     user_content = (
-        f"Intent: {state.intent}\n"
-        f"Message: {state.user_input}\n"
-        f"Profile: {profile_snippet}\n"
-        f"Recent conversation:\n{chr(10).join(recent_lines) if recent_lines else '(none)'}\n"
-        f"Relevant long-term memory:\n{chr(10).join(long_term_lines) if long_term_lines else '(none)'}\n"
+        f"Current time: {state.now_local or state.now_utc} {(('(' + state.tz_local + ')') if state.tz_local else '')}\n"
+        + (
+            f"Today (local): {state.today_local} ({state.weekday_local})\n"
+            if (state.today_local and state.weekday_local)
+            else (f"Today (local): {state.today_local}\n" if state.today_local else "")
+        )
+        + f"Intent: {state.intent}\n"
+        + f"LATEST USER MESSAGE (answer/plan for this): {state.user_input}\n"
+        + f"Profile: {profile_snippet}\n"
+        + f"Recent conversation:\n{chr(10).join(recent_lines) if recent_lines else '(none)'}\n"
+        + f"Relevant long-term memory:\n{chr(10).join(long_term_lines) if long_term_lines else '(none)'}\n"
     )
 
     try:
@@ -169,7 +200,8 @@ async def planning(state: AxisState) -> dict:
     try:
         data = json.loads(response.content.strip())
         steps = [PlanStep(**s) for s in data.get("steps", [])]
-        return {"plan": steps, "requires_approval": data.get("requires_approval", False)}
+
+        return {"plan": steps, "requires_approval": False}
     except (json.JSONDecodeError, Exception) as exc:
         return {
             "plan": [],
