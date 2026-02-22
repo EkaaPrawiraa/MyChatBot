@@ -35,8 +35,8 @@ type OwnerIntegrations struct {
 
 	GoogleEmail       string    `json:"google_email" db:"google_email"`
 	GoogleRefreshToken string   `json:"-" db:"google_refresh_token"`
-	GoogleAccessToken  string   `json:"-" db:"google_access_token"`
-	GoogleTokenExpiry  time.Time `json:"-" db:"google_token_expiry"`
+	GoogleAccessToken  string     `json:"-" db:"google_access_token"`
+	GoogleTokenExpiry  *time.Time `json:"-" db:"google_token_expiry"`
 
 	WhatsAppPhoneNumberID     string `json:"whatsapp_phone_number_id" db:"whatsapp_phone_number_id"`
 	WhatsAppBusinessAccountID string `json:"whatsapp_business_account_id" db:"whatsapp_business_account_id"`
@@ -46,6 +46,16 @@ type OwnerIntegrations struct {
 
 	DiscordWebhookURL string `json:"-" db:"discord_webhook_url"`
 	DiscordBotToken   string `json:"-" db:"discord_bot_token"`
+
+	XAPIKey            string `json:"-" db:"x_api_key"`
+	XAPISecret         string `json:"-" db:"x_api_secret"`
+	XAccessToken       string `json:"-" db:"x_access_token"`
+	XAccessTokenSecret string `json:"-" db:"x_access_token_secret"`
+	XBearerToken       string `json:"-" db:"x_bearer_token"`
+	XOAuth2AccessToken string `json:"-" db:"x_oauth2_access_token"`
+	XOAuth2RefreshToken string `json:"-" db:"x_oauth2_refresh_token"`
+	XOAuth2TokenExpiry *time.Time `json:"-" db:"x_oauth2_token_expiry"`
+	XOAuth2Scope       string `json:"-" db:"x_oauth2_scope"`
 
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
@@ -75,6 +85,14 @@ type IntegrationsStatus struct {
 		WebhookMasked     string `json:"webhook_masked"`
 		BotTokenMasked    string `json:"bot_token_masked"`
 	} `json:"discord"`
+
+	X struct {
+		Configured       bool   `json:"configured"`
+		APIKeyMasked     string `json:"api_key_masked"`
+		AccessTokenMasked string `json:"access_token_masked"`
+		BearerTokenMasked string `json:"bearer_token_masked"`
+		OAuth2AccessTokenMasked string `json:"oauth2_access_token_masked"`
+	} `json:"x"`
 }
 
 // AIKeyMasked returns a masked representation of the API key for display.

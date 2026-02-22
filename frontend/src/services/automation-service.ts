@@ -12,13 +12,29 @@ export type { AutomationCreateRequest, AutomationUpdateRequest } from "@/types";
 type BackendAutomationRule = {
   id: string;
   name: string;
-  trigger_type: string;
-  condition_json: string; // base64 ([]byte)
-  action_json: string; // base64 ([]byte)
+  trigger_type?: string;
+  condition_json?: string; // base64 ([]byte)
+  action_json?: string; // base64 ([]byte)
   enabled: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+
+  triggerType?: string;
+  conditionJson?: string;
+  actionJson?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
+
+function encodeAutomationTextToBackendJson(value: string): unknown {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
 
 function decodeAutomationBytesToText(inputBase64: string): string {
   const decoded = inputBase64 ? base64DecodeToUtf8(inputBase64) : "";
@@ -73,12 +89,14 @@ function mapAutomation(r: BackendAutomationRule): AutomationRule {
   return {
     id: r.id,
     name: r.name,
-    trigger: r.trigger_type,
-    condition: decodeAutomationBytesToText(r.condition_json),
-    action: decodeAutomationBytesToText(r.action_json),
+    trigger: r.triggerType ?? r.trigger_type ?? "",
+    condition: decodeAutomationBytesToText(
+      r.conditionJson ?? r.condition_json ?? "",
+    ),
+    action: decodeAutomationBytesToText(r.actionJson ?? r.action_json ?? ""),
     enabled: r.enabled,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    createdAt: r.createdAt ?? r.created_at ?? "",
+    updatedAt: r.updatedAt ?? r.updated_at ?? "",
   };
 }
 
@@ -98,9 +116,12 @@ export const automationService = {
       {
         name: request.name,
         trigger_type: request.trigger,
-        // Send as JSON string; backend stores []byte.
-        condition_json: request.condition ?? "",
-        action_json: request.action ?? "",
+        // Backend expects JSON. If the user pasted JSON text, send it as JSON;
+        // otherwise preserve as a plain string for backwards compatibility.
+        condition_json: encodeAutomationTextToBackendJson(
+          request.condition ?? "",
+        ),
+        action_json: encodeAutomationTextToBackendJson(request.action ?? ""),
         enabled: request.enabled,
       },
     );
@@ -115,8 +136,11 @@ export const automationService = {
     if (request.name !== undefined) payload.name = request.name;
     if (request.trigger !== undefined) payload.trigger_type = request.trigger;
     if (request.condition !== undefined)
-      payload.condition_json = request.condition;
-    if (request.action !== undefined) payload.action_json = request.action;
+      payload.condition_json = encodeAutomationTextToBackendJson(
+        request.condition,
+      );
+    if (request.action !== undefined)
+      payload.action_json = encodeAutomationTextToBackendJson(request.action);
     if (request.enabled !== undefined) payload.enabled = request.enabled;
 
     const backend = await apiClient.put<BackendAutomationRule>(

@@ -10,16 +10,20 @@ type BackendSession = {
   id: string;
   title: string;
   active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type BackendShortTermMessage = {
   id: string;
-  session_id: string;
+  session_id?: string;
+  sessionId?: string;
   role: "user" | "assistant" | "system";
   message: string;
-  created_at: string;
+  created_at?: string;
+  createdAt?: string;
 };
 
 function isUserOrAssistantMessage(
@@ -29,14 +33,16 @@ function isUserOrAssistantMessage(
 }
 
 function mapSession(s: BackendSession): Session {
+  const createdAt = s.createdAt ?? s.created_at ?? "";
+  const updatedAt = s.updatedAt ?? s.updated_at ?? createdAt;
   return {
     id: s.id,
     title: s.title,
-    startTime: s.created_at,
+    startTime: createdAt,
     endTime: undefined,
     closed: !s.active,
-    createdAt: s.created_at,
-    updatedAt: s.updated_at,
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -85,10 +91,10 @@ export const sessionService = {
 
     return (backend || []).filter(isUserOrAssistantMessage).map((m) => ({
       id: m.id,
-      sessionId: m.session_id,
+      sessionId: m.sessionId ?? m.session_id ?? "",
       role: m.role,
       content: m.message,
-      createdAt: m.created_at,
+      createdAt: m.createdAt ?? m.created_at ?? "",
     }));
   },
 };

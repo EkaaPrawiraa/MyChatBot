@@ -46,7 +46,7 @@ if ! "$PYTHON" -c "import pytest" 2>/dev/null; then
     "$PIP" install pytest pytest-asyncio httpx
 fi
 
-EXTRA_ARGS="${*}"
+EXTRA_ARGS="${*:-}"
 
 echo "Running: $PYTHON -m pytest tests/ -v $EXTRA_ARGS"
 echo ""

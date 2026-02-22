@@ -8,9 +8,11 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,41 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+var (
+	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>`)
+	ddgTagRe        = regexp.MustCompile(`(?is)<[^>]+>`)
+	whitespaceRe    = regexp.MustCompile(`\s+`)
+)
+
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	if u == nil {
+		return false
+	}
+	return u.Scheme == "http" || u.Scheme == "https"
+}
+
+func cleanHTMLToText(htmlStr string) string {
+	// Remove script/style blocks first (coarse but effective).
+	scriptRe := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	styleRe := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	noScript := scriptRe.ReplaceAllString(htmlStr, " ")
+	noStyle := styleRe.ReplaceAllString(noScript, " ")
+
+	// Replace some block-ish tags with newlines to preserve structure.
+	blockRe := regexp.MustCompile(`(?is)</?(p|br|div|li|h1|h2|h3|h4|h5|h6|tr|td|th|section|article|header|footer|blockquote)[^>]*>`)
+	withBreaks := blockRe.ReplaceAllString(noStyle, "\n")
+
+	// Strip remaining tags.
+	text := ddgTagRe.ReplaceAllString(withBreaks, " ")
+	text = html.UnescapeString(text)
+	text = whitespaceRe.ReplaceAllString(text, " ")
+	return strings.TrimSpace(text)
+}
 
 func normalizeCalendarEventPayload(payload map[string]any) map[string]any {
 	if payload == nil {
@@ -59,22 +96,654 @@ type toolsUsecase struct {
 	clientID       string
 	clientSecret   string
 	redirectURL    string
+	xClientID      string
+	xClientSecret  string
+	xRedirectURI   string
 	whatsAppBotURL string
 	httpClient     *http.Client
 }
 
 func NewToolsUsecase(
 	integrations domain.OwnerIntegrationsRepository,
-	clientID, clientSecret, redirectURL, whatsAppBotURL string,
+	clientID, clientSecret, redirectURL string,
+	xClientID, xClientSecret, xRedirectURI string,
+	whatsAppBotURL string,
 ) domain.ToolsUsecase {
 	return &toolsUsecase{
 		integrations:   integrations,
 		clientID:       clientID,
 		clientSecret:   clientSecret,
 		redirectURL:    redirectURL,
+		xClientID:      xClientID,
+		xClientSecret:  xClientSecret,
+		xRedirectURI:   xRedirectURI,
 		whatsAppBotURL: strings.TrimRight(whatsAppBotURL, "/"),
 		httpClient:     &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+func (u *toolsUsecase) xOAuthConfig() (*oauth2.Config, error) {
+	if strings.TrimSpace(u.xClientID) == "" || strings.TrimSpace(u.xClientSecret) == "" || strings.TrimSpace(u.xRedirectURI) == "" {
+		return nil, apperror.Validation("X OAuth is not configured (X_CLIENT_ID/SECRET/REDIRECT_URI)")
+	}
+
+	return &oauth2.Config{
+		ClientID:     strings.TrimSpace(u.xClientID),
+		ClientSecret: strings.TrimSpace(u.xClientSecret),
+		RedirectURL:  strings.TrimSpace(u.xRedirectURI),
+		Scopes: []string{
+			"tweet.read",
+			"tweet.write",
+			"users.read",
+			"offline.access",
+		},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://twitter.com/i/oauth2/authorize",
+			TokenURL: "https://api.twitter.com/2/oauth2/token",
+		},
+	}, nil
+}
+
+func (u *toolsUsecase) getXOAuth2AccessToken(ctx context.Context) (string, error) {
+	integ, err := u.integrations.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.TrimSpace(integ.XOAuth2AccessToken) == "" && strings.TrimSpace(integ.XOAuth2RefreshToken) == "" {
+		return "", apperror.Validation("X is not connected")
+	}
+
+	// Use cached access token if still valid.
+	if strings.TrimSpace(integ.XOAuth2AccessToken) != "" && integ.XOAuth2TokenExpiry != nil && !integ.XOAuth2TokenExpiry.IsZero() {
+		if time.Until(*integ.XOAuth2TokenExpiry) > 60*time.Second {
+			return integ.XOAuth2AccessToken, nil
+		}
+	}
+
+	cfg, err := u.xOAuthConfig()
+	if err != nil {
+		return "", err
+	}
+
+	// Refresh when needed.
+	seed := &oauth2.Token{
+		AccessToken:  integ.XOAuth2AccessToken,
+		RefreshToken: integ.XOAuth2RefreshToken,
+		TokenType:    "bearer",
+	}
+	if integ.XOAuth2TokenExpiry != nil {
+		seed.Expiry = *integ.XOAuth2TokenExpiry
+	}
+
+	ts := cfg.TokenSource(ctx, seed)
+	tok, err := ts.Token()
+	if err != nil {
+		return "", apperror.ExternalError(err, "failed to refresh X access token")
+	}
+
+	var expiry *time.Time
+	if !tok.Expiry.IsZero() {
+		e := tok.Expiry
+		expiry = &e
+	}
+
+	scope := strings.TrimSpace(integ.XOAuth2Scope)
+	if extra := tok.Extra("scope"); extra != nil {
+		if s, ok := extra.(string); ok {
+			scope = strings.TrimSpace(s)
+		}
+	}
+
+	// Persist refreshed token details for later calls.
+	_ = u.integrations.UpsertXOAuth2(ctx, tok.AccessToken, tok.RefreshToken, expiry, scope)
+
+	return tok.AccessToken, nil
+}
+
+func (u *toolsUsecase) XMe(ctx context.Context) (any, error) {
+	tok, err := u.getXOAuth2AccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := "https://api.twitter.com/2/users/me?user.fields=created_at,description,profile_image_url,public_metrics,verified"
+	return u.doJSON(ctx, http.MethodGet, endpoint, nil, map[string]string{
+		"Authorization": "Bearer " + tok,
+	})
+}
+
+func (u *toolsUsecase) XMyTweets(ctx context.Context, limit int) (any, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	me, err := u.XMe(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Expect: {"data": {"id":"..."}}
+	meMap, ok := me.(map[string]any)
+	if !ok {
+		return nil, apperror.Internal("unexpected X profile response")
+	}
+	dataAny, ok := meMap["data"]
+	if !ok {
+		return nil, apperror.Internal("unexpected X profile response")
+	}
+	dataMap, ok := dataAny.(map[string]any)
+	if !ok {
+		return nil, apperror.Internal("unexpected X profile response")
+	}
+	userID, _ := dataMap["id"].(string)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, apperror.Internal("missing X user id")
+	}
+
+	tok, err := u.getXOAuth2AccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	qs := url.Values{}
+	qs.Set("max_results", strconv.Itoa(limit))
+	qs.Set("tweet.fields", "created_at,public_metrics")
+	endpoint := fmt.Sprintf("https://api.twitter.com/2/users/%s/tweets?%s", url.PathEscape(userID), qs.Encode())
+	return u.doJSON(ctx, http.MethodGet, endpoint, nil, map[string]string{
+		"Authorization": "Bearer " + tok,
+	})
+}
+
+func (u *toolsUsecase) XTweet(ctx context.Context, text string) (any, error) {
+	t := strings.TrimSpace(text)
+	if t == "" {
+		return nil, apperror.Validation("text is required")
+	}
+	if len([]rune(t)) > 280 {
+		return nil, apperror.Validation("tweet text exceeds 280 characters")
+	}
+
+	tok, err := u.getXOAuth2AccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	body := map[string]any{"text": t}
+	endpoint := "https://api.twitter.com/2/tweets"
+	return u.doJSON(ctx, http.MethodPost, endpoint, body, map[string]string{
+		"Authorization": "Bearer " + tok,
+	})
+}
+
+func (u *toolsUsecase) XSearch(ctx context.Context, query string, maxResults int) (any, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil, apperror.Validation("query is required")
+	}
+	if maxResults <= 0 {
+		maxResults = 10
+	}
+	if maxResults > 25 {
+		maxResults = 25
+	}
+
+	tok, err := u.getXOAuth2AccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	qs := url.Values{}
+	qs.Set("query", q)
+	qs.Set("max_results", strconv.Itoa(maxResults))
+	qs.Set("tweet.fields", "created_at,public_metrics,author_id")
+	qs.Set("expansions", "author_id")
+	qs.Set("user.fields", "username,name,profile_image_url,verified")
+
+	endpoint := "https://api.twitter.com/2/tweets/search/recent?" + qs.Encode()
+	return u.doJSON(ctx, http.MethodGet, endpoint, nil, map[string]string{
+		"Authorization": "Bearer " + tok,
+	})
+}
+
+func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults int) (any, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil, apperror.Validation("query is required")
+	}
+	if maxResults <= 0 {
+		maxResults = 5
+	}
+	if maxResults > 10 {
+		maxResults = 10
+	}
+
+	normalizeDDGRedirect := func(rawURL string) string {
+		u, err := url.Parse(rawURL)
+		if err != nil || u == nil {
+			return rawURL
+		}
+		if (u.Scheme == "http" || u.Scheme == "https") && strings.Contains(u.Host, "duckduckgo.com") && strings.HasPrefix(u.Path, "/l/") {
+			uddg := u.Query().Get("uddg")
+			if uddg != "" {
+				if decoded, err := url.QueryUnescape(uddg); err == nil && isHTTPURL(decoded) {
+					return decoded
+				}
+			}
+		}
+		return rawURL
+	}
+
+	warnings := make([]string, 0, 2)
+	addWarning := func(w string) {
+		w = strings.TrimSpace(w)
+		if w == "" {
+			return
+		}
+		warnings = append(warnings, w)
+	}
+
+	// -------- Provider 1: DuckDuckGo Lite HTML (best results when it works) --------
+	{
+		params := url.Values{}
+		params.Set("q", q)
+		searchURL := "https://lite.duckduckgo.com/lite/?" + params.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Headers to avoid some bot blocks.
+		req.Header.Set("User-Agent", "axis-assistant/1.0 (+https://github.com/EkaaPrawiraa/axis-assistant)")
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			addWarning(fmt.Sprintf("duckduckgo lite request failed: %v", err))
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 800))
+				addWarning(fmt.Sprintf("duckduckgo lite returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body))))
+			} else {
+				buf, err := io.ReadAll(io.LimitReader(resp.Body, 350_000))
+				if err != nil {
+					addWarning("duckduckgo lite response read failed")
+				} else {
+					htmlStr := string(buf)
+					seen := map[string]bool{}
+					results := make([]map[string]any, 0, maxResults)
+					// lite pages include many links; we keep http(s) results and de-dupe.
+					matches := ddgResultLinkRe.FindAllStringSubmatchIndex(htmlStr, -1)
+					for _, idx := range matches {
+						if len(results) >= maxResults {
+							break
+						}
+						// idx contains pairs: full match + capture groups.
+						if len(idx) < 6 {
+							continue
+						}
+						href := strings.TrimSpace(html.UnescapeString(htmlStr[idx[2]:idx[3]]))
+						titleHTML := strings.TrimSpace(htmlStr[idx[4]:idx[5]])
+						if href == "" {
+							continue
+						}
+						href = normalizeDDGRedirect(href)
+						if !strings.HasPrefix(href, "http://") && !strings.HasPrefix(href, "https://") {
+							continue
+						}
+						if seen[href] {
+							continue
+						}
+						seen[href] = true
+
+						title := strings.TrimSpace(ddgTagRe.ReplaceAllString(titleHTML, ""))
+						title = html.UnescapeString(title)
+						if title == "" {
+							title = href
+						}
+
+						// Best-effort snippet extraction: grab a small HTML window after the link.
+						snippet := ""
+						end := idx[1]
+						if end > 0 && end < len(htmlStr) {
+							windowEnd := end + 700
+							if windowEnd > len(htmlStr) {
+								windowEnd = len(htmlStr)
+							}
+							window := htmlStr[end:windowEnd]
+							// Strip tags + normalize whitespace.
+							clean := strings.TrimSpace(ddgTagRe.ReplaceAllString(window, " "))
+							clean = html.UnescapeString(clean)
+							clean = whitespaceRe.ReplaceAllString(clean, " ")
+							clean = strings.TrimSpace(clean)
+							// Heuristics: keep only meaningful short text.
+							if len(clean) > 0 {
+								// Remove the URL if it appears in the snippet.
+								clean = strings.ReplaceAll(clean, href, "")
+								clean = whitespaceRe.ReplaceAllString(clean, " ")
+								clean = strings.TrimSpace(clean)
+							}
+							if len(clean) >= 30 {
+								if len(clean) > 240 {
+									clean = clean[:240]
+									clean = strings.TrimSpace(clean)
+								}
+								snippet = clean
+							}
+						}
+
+						results = append(results, map[string]any{
+							"title":   title,
+							"url":     href,
+							"snippet": snippet,
+						})
+					}
+
+					if len(results) > 0 {
+						out := map[string]any{
+							"query":   q,
+							"results": results,
+							"source":  "duckduckgo_lite",
+						}
+						if len(warnings) > 0 {
+							out["warnings"] = warnings
+						}
+						return out, nil
+					}
+				}
+			}
+		}
+	}
+
+	// -------- Provider 2: DuckDuckGo Instant Answer API (JSON) --------
+	{
+		params := url.Values{}
+		params.Set("q", q)
+		params.Set("format", "json")
+		params.Set("no_html", "1")
+		params.Set("no_redirect", "1")
+		searchURL := "https://api.duckduckgo.com/?" + params.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "axis-assistant/1.0")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			addWarning(fmt.Sprintf("duckduckgo api request failed: %v", err))
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 800))
+				addWarning(fmt.Sprintf("duckduckgo api returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body))))
+			} else {
+				b, err := io.ReadAll(io.LimitReader(resp.Body, 800_000))
+				if err != nil {
+					addWarning("duckduckgo api response read failed")
+				} else {
+					var payload map[string]any
+					if err := json.Unmarshal(b, &payload); err != nil {
+						addWarning("duckduckgo api json decode failed")
+					} else {
+						seen := map[string]bool{}
+						results := make([]map[string]any, 0, maxResults)
+
+						addResult := func(rawText, link string) {
+							if len(results) >= maxResults {
+								return
+							}
+							link = strings.TrimSpace(link)
+							if !isHTTPURL(link) {
+								return
+							}
+							if seen[link] {
+								return
+							}
+							seen[link] = true
+							rawText = strings.TrimSpace(rawText)
+							title := rawText
+							snippet := ""
+							if parts := strings.SplitN(rawText, " - ", 2); len(parts) == 2 {
+								if strings.TrimSpace(parts[0]) != "" {
+									title = strings.TrimSpace(parts[0])
+								}
+								snippet = strings.TrimSpace(parts[1])
+							}
+							if title == "" {
+								title = link
+							}
+							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+						}
+
+						// "Results" is a flat list.
+						if raw, ok := payload["Results"]; ok {
+							if arr, ok := raw.([]any); ok {
+								for _, it := range arr {
+									m, ok := it.(map[string]any)
+									if !ok {
+										continue
+									}
+									text, _ := m["Text"].(string)
+									firstURL, _ := m["FirstURL"].(string)
+									addResult(text, firstURL)
+									if len(results) >= maxResults {
+										break
+									}
+								}
+							}
+						}
+
+						// "RelatedTopics" can be nested.
+						var walkTopics func(any)
+						walkTopics = func(v any) {
+							if len(results) >= maxResults {
+								return
+							}
+							arr, ok := v.([]any)
+							if !ok {
+								return
+							}
+							for _, it := range arr {
+								if len(results) >= maxResults {
+									return
+								}
+								m, ok := it.(map[string]any)
+								if !ok {
+									continue
+								}
+								if nested, ok := m["Topics"]; ok {
+									walkTopics(nested)
+									continue
+								}
+								text, _ := m["Text"].(string)
+								firstURL, _ := m["FirstURL"].(string)
+								addResult(text, firstURL)
+							}
+						}
+						if raw, ok := payload["RelatedTopics"]; ok {
+							walkTopics(raw)
+						}
+
+						if len(results) > 0 {
+							out := map[string]any{
+								"query":   q,
+								"results": results,
+								"source":  "duckduckgo_api",
+							}
+							if len(warnings) > 0 {
+								out["warnings"] = warnings
+							}
+							return out, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// -------- Provider 3: Wikipedia OpenSearch (stable fallback) --------
+	{
+		params := url.Values{}
+		params.Set("action", "opensearch")
+		params.Set("search", q)
+		params.Set("limit", strconv.Itoa(maxResults))
+		params.Set("namespace", "0")
+		params.Set("format", "json")
+		searchURL := "https://en.wikipedia.org/w/api.php?" + params.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "axis-assistant/1.0")
+		req.Header.Set("Accept", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			addWarning("wikipedia request failed")
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 800))
+				addWarning(fmt.Sprintf("wikipedia returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body))))
+			} else {
+				b, err := io.ReadAll(io.LimitReader(resp.Body, 800_000))
+				if err != nil {
+					addWarning("wikipedia response read failed")
+				} else {
+					var arr []any
+					if err := json.Unmarshal(b, &arr); err != nil {
+						addWarning("wikipedia json decode failed")
+					} else if len(arr) >= 4 {
+						titles, _ := arr[1].([]any)
+						descriptions, _ := arr[2].([]any)
+						urls, _ := arr[3].([]any)
+						results := make([]map[string]any, 0, maxResults)
+						seen := map[string]bool{}
+						for i := 0; i < len(titles) && i < len(urls) && len(results) < maxResults; i++ {
+							title, _ := titles[i].(string)
+							snippet := ""
+							if i < len(descriptions) {
+								snippet, _ = descriptions[i].(string)
+							}
+							link, _ := urls[i].(string)
+							if !isHTTPURL(link) || seen[link] {
+								continue
+							}
+							seen[link] = true
+							if strings.TrimSpace(title) == "" {
+								title = link
+							}
+							snippet = strings.TrimSpace(snippet)
+							if len(snippet) > 240 {
+								snippet = strings.TrimSpace(snippet[:240])
+							}
+							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+						}
+
+						out := map[string]any{
+							"query":   q,
+							"results": results,
+							"source":  "wikipedia_opensearch",
+						}
+						if len(warnings) > 0 {
+							out["warnings"] = warnings
+						}
+						return out, nil
+					}
+				}
+			}
+		}
+	}
+
+	// Nothing worked; return empty results but keep response successful.
+	out := map[string]any{
+		"query":   q,
+		"results": []map[string]any{},
+		"source":  "none",
+	}
+	if len(warnings) > 0 {
+		out["warnings"] = warnings
+	}
+	return out, nil
+}
+
+func (u *toolsUsecase) WebFetch(ctx context.Context, pageURL string, maxBytes int) (any, error) {
+	pageURL = strings.TrimSpace(pageURL)
+	if pageURL == "" {
+		return nil, apperror.Validation("url is required")
+	}
+	if !isHTTPURL(pageURL) {
+		return nil, apperror.Validation("url must be http(s)")
+	}
+	if maxBytes <= 0 {
+		maxBytes = 20000
+	}
+	if maxBytes > 200000 {
+		maxBytes = 200000
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "axis-assistant/1.0")
+	req.Header.Set("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, apperror.ExternalError(err, "failed to fetch url")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1500))
+		err := fmt.Errorf("fetch failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, apperror.ExternalError(err, "failed to fetch url")
+	}
+
+	contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	// We only support html/text for now.
+	if contentType != "" && !strings.Contains(contentType, "text/html") && !strings.Contains(contentType, "text/plain") {
+		return nil, apperror.Validation("unsupported content type")
+	}
+
+	buf, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxBytes)))
+	if err != nil {
+		return nil, apperror.ExternalError(err, "failed reading response")
+	}
+
+	raw := string(buf)
+	text := raw
+	if strings.Contains(contentType, "text/html") || ddgTagRe.MatchString(raw) {
+		text = cleanHTMLToText(raw)
+	}
+
+	// Hard cap output size to avoid huge payloads.
+	if len(text) > maxBytes {
+		text = text[:maxBytes]
+	}
+
+	return map[string]any{
+		"url":          pageURL,
+		"content_type": contentType,
+		"text":         text,
+		"truncated":    len(text) >= maxBytes,
+	}, nil
 }
 
 func (u *toolsUsecase) oauthConfig() (*oauth2.Config, error) {
@@ -137,8 +806,8 @@ func (u *toolsUsecase) getGoogleAccessToken(ctx context.Context) (string, error)
 	}
 
 	// Use cached access token if still valid.
-	if strings.TrimSpace(integ.GoogleAccessToken) != "" && !integ.GoogleTokenExpiry.IsZero() {
-		if time.Until(integ.GoogleTokenExpiry) > 60*time.Second {
+	if strings.TrimSpace(integ.GoogleAccessToken) != "" && integ.GoogleTokenExpiry != nil && !integ.GoogleTokenExpiry.IsZero() {
+		if time.Until(*integ.GoogleTokenExpiry) > 60*time.Second {
 			return integ.GoogleAccessToken, nil
 		}
 	}

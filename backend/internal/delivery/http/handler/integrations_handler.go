@@ -2,9 +2,11 @@ package handler
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
@@ -22,6 +24,42 @@ func NewIntegrationsHandler(uc domain.IntegrationsUsecase, dashboardURL string) 
 }
 
 const googleStateCookieName = "axis_google_oauth_state"
+
+type oauthStateEntry struct {
+	Verifier string
+	Expires  time.Time
+}
+
+type oauthStateStore struct {
+	mu sync.Mutex
+	m  map[string]oauthStateEntry
+}
+
+func newOAuthStateStore() *oauthStateStore {
+	return &oauthStateStore{m: map[string]oauthStateEntry{}}
+}
+
+func (s *oauthStateStore) put(state, verifier string, ttl time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[state] = oauthStateEntry{Verifier: verifier, Expires: time.Now().Add(ttl)}
+}
+
+func (s *oauthStateStore) pop(state string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.m[state]
+	if !ok {
+		return "", false
+	}
+	delete(s.m, state)
+	if time.Now().After(entry.Expires) {
+		return "", false
+	}
+	return entry.Verifier, true
+}
+
+var xOAuthStateStore = newOAuthStateStore()
 
 func isSecureRequest(r *http.Request) bool {
 	if r == nil {
@@ -43,6 +81,18 @@ func randomState() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func pkcePair() (verifier string, challenge string, err error) {
+	// Verifier length should be 43-128 chars. 32 bytes => 43 chars base64url.
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	verifier = base64.RawURLEncoding.EncodeToString(b)
+	h := sha256.Sum256([]byte(verifier))
+	challenge = base64.RawURLEncoding.EncodeToString(h[:])
+	return verifier, challenge, nil
 }
 
 func (h *IntegrationsHandler) Status(c *gin.Context) {
@@ -125,6 +175,68 @@ func (h *IntegrationsHandler) GoogleDisconnect(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"disconnected": true})
+}
+
+func (h *IntegrationsHandler) XConnect(c *gin.Context) {
+	state, err := randomState()
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	verifier, challenge, err := pkcePair()
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	// Store verifier server-side so it works even when connect is hit via localhost
+	// but callback arrives via ngrok domain.
+	xOAuthStateStore.put(state, verifier, 10*time.Minute)
+
+	authURL, err := h.uc.XAuthURL(state, challenge)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	c.Redirect(http.StatusFound, authURL)
+}
+
+func (h *IntegrationsHandler) XCallback(c *gin.Context) {
+	if errParam := strings.TrimSpace(c.Query("error")); errParam != "" {
+		desc := strings.TrimSpace(c.Query("error_description"))
+		if desc != "" {
+			response.BadRequest(c, errParam+": "+desc)
+			return
+		}
+		response.BadRequest(c, errParam)
+		return
+	}
+
+	code := c.Query("code")
+	state := c.Query("state")
+	if strings.TrimSpace(code) == "" || strings.TrimSpace(state) == "" {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+
+	verifier, ok := xOAuthStateStore.pop(state)
+	if !ok {
+		response.BadRequest(c, "invalid state")
+		return
+	}
+
+	if err := h.uc.HandleXCallback(c.Request.Context(), code, verifier); err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	if strings.TrimSpace(h.dashboardURL) != "" {
+		c.Redirect(http.StatusFound, strings.TrimRight(h.dashboardURL, "/")+"/settings?x=connected")
+		return
+	}
+	response.OK(c, gin.H{"connected": true})
 }
 
 type whatsappUpsertRequest struct {
@@ -220,6 +332,42 @@ func (h *IntegrationsHandler) DiscordUpsert(c *gin.Context) {
 
 func (h *IntegrationsHandler) DiscordDisconnect(c *gin.Context) {
 	if err := h.uc.DisconnectDiscord(c.Request.Context()); err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, gin.H{"disconnected": true})
+}
+
+type xUpsertRequest struct {
+	APIKey            string `json:"api_key"`
+	APISecret         string `json:"api_secret"`
+	AccessToken       string `json:"access_token"`
+	AccessTokenSecret string `json:"access_token_secret"`
+	BearerToken       string `json:"bearer_token"`
+}
+
+func (h *IntegrationsHandler) XUpsert(c *gin.Context) {
+	var req xUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.uc.UpsertX(c.Request.Context(), req.APIKey, req.APISecret, req.AccessToken, req.AccessTokenSecret, req.BearerToken); err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	st, err := h.uc.GetStatus(c.Request.Context())
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, st)
+}
+
+func (h *IntegrationsHandler) XDisconnect(c *gin.Context) {
+	if err := h.uc.DisconnectX(c.Request.Context()); err != nil {
 		response.Err(c, err)
 		return
 	}

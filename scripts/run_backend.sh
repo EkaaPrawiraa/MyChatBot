@@ -37,4 +37,16 @@ fi
 
 echo "Running: go run ./cmd/api/"
 echo ""
+
+# Fail fast if the port is already taken (common when an old backend is still running).
+if command -v lsof &>/dev/null; then
+    PIDS="$(lsof -ti tcp:8080 -sTCP:LISTEN 2>/dev/null || true)"
+    if [ -n "$PIDS" ]; then
+        red "✗ Port 8080 is already in use."
+        echo "Listening PID(s):"; echo "$PIDS" | sed 's/^/  - /'
+        echo "Stop them with: kill <pid>  (or: kill -9 <pid>)"
+        exit 1
+    fi
+fi
+
 exec go run ./cmd/api/

@@ -122,3 +122,47 @@ func (r *ownerIntegrationsRepo) ClearDiscord(ctx context.Context) error {
 		WHERE owner_id = 1`)
 	return err
 }
+
+func (r *ownerIntegrationsRepo) UpsertX(ctx context.Context, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken string) error {
+	query := `
+		UPDATE owner_integrations SET
+			x_api_key = COALESCE(NULLIF($1, ''), x_api_key),
+			x_api_secret = COALESCE(NULLIF($2, ''), x_api_secret),
+			x_access_token = COALESCE(NULLIF($3, ''), x_access_token),
+			x_access_token_secret = COALESCE(NULLIF($4, ''), x_access_token_secret),
+			x_bearer_token = COALESCE(NULLIF($5, ''), x_bearer_token),
+			updated_at = NOW()
+		WHERE owner_id = 1`
+	_, err := r.db.ExecContext(ctx, query, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken)
+	return err
+}
+
+func (r *ownerIntegrationsRepo) UpsertXOAuth2(ctx context.Context, accessToken, refreshToken string, expiry *time.Time, scope string) error {
+	query := `
+		UPDATE owner_integrations SET
+			x_oauth2_access_token = $1,
+			x_oauth2_refresh_token = COALESCE(NULLIF($2, ''), x_oauth2_refresh_token),
+			x_oauth2_token_expiry = $3,
+			x_oauth2_scope = $4,
+			updated_at = NOW()
+		WHERE owner_id = 1`
+	_, err := r.db.ExecContext(ctx, query, accessToken, refreshToken, expiry, scope)
+	return err
+}
+
+func (r *ownerIntegrationsRepo) ClearX(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE owner_integrations SET
+			x_api_key = '',
+			x_api_secret = '',
+			x_access_token = '',
+			x_access_token_secret = '',
+			x_bearer_token = '',
+			x_oauth2_access_token = '',
+			x_oauth2_refresh_token = '',
+			x_oauth2_token_expiry = NULL,
+			x_oauth2_scope = '',
+			updated_at = NOW()
+		WHERE owner_id = 1`)
+	return err
+}

@@ -24,6 +24,9 @@ type OwnerIntegrationsRepository interface {
 	ClearTelegram(ctx context.Context) error
 	UpsertDiscord(ctx context.Context, webhookURL, botToken string) error
 	ClearDiscord(ctx context.Context) error
+	UpsertX(ctx context.Context, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken string) error
+	UpsertXOAuth2(ctx context.Context, accessToken, refreshToken string, expiry *time.Time, scope string) error
+	ClearX(ctx context.Context) error
 }
 
 // SessionRepository manages conversation sessions.

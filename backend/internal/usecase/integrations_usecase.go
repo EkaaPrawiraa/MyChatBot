@@ -16,21 +16,29 @@ import (
 
 type integrationsUsecase struct {
 	repo         domain.OwnerIntegrationsRepository
-	clientID     string
-	clientSecret string
-	redirectURL  string
+	googleClientID     string
+	googleClientSecret string
+	googleRedirectURL  string
+	xClientID     string
+	xClientSecret string
+	xRedirectURI  string
 	dashboardURL string
 }
 
 func NewIntegrationsUsecase(
 	repo domain.OwnerIntegrationsRepository,
-	clientID, clientSecret, redirectURL, dashboardURL string,
+	googleClientID, googleClientSecret, googleRedirectURL string,
+	xClientID, xClientSecret, xRedirectURI string,
+	dashboardURL string,
 ) domain.IntegrationsUsecase {
 	return &integrationsUsecase{
 		repo:         repo,
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		redirectURL:  redirectURL,
+		googleClientID:     googleClientID,
+		googleClientSecret: googleClientSecret,
+		googleRedirectURL:  googleRedirectURL,
+		xClientID:     xClientID,
+		xClientSecret: xClientSecret,
+		xRedirectURI:  xRedirectURI,
 		dashboardURL: dashboardURL,
 	}
 }
@@ -45,8 +53,9 @@ func maskSecret(v string) string {
 	return v[:4] + "..." + v[len(v)-4:]
 }
 
-func (u *integrationsUsecase) oauthConfig() (*oauth2.Config, error) {
-	if u.clientID == "" || u.clientSecret == "" || u.redirectURL == "" {
+
+func (u *integrationsUsecase) googleOAuthConfig() (*oauth2.Config, error) {
+	if u.googleClientID == "" || u.googleClientSecret == "" || u.googleRedirectURL == "" {
 		return nil, apperror.Validation("Google OAuth is not configured (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL)")
 	}
 
@@ -69,16 +78,42 @@ func (u *integrationsUsecase) oauthConfig() (*oauth2.Config, error) {
 	}
 
 	return &oauth2.Config{
-		ClientID:     u.clientID,
-		ClientSecret: u.clientSecret,
-		RedirectURL:  u.redirectURL,
+		ClientID:     u.googleClientID,
+		ClientSecret: u.googleClientSecret,
+		RedirectURL:  u.googleRedirectURL,
 		Scopes:       scopes,
 		Endpoint:     google.Endpoint,
 	}, nil
 }
 
+func (u *integrationsUsecase) xOAuthConfig() (*oauth2.Config, error) {
+	if strings.TrimSpace(u.xClientID) == "" || strings.TrimSpace(u.xClientSecret) == "" || strings.TrimSpace(u.xRedirectURI) == "" {
+		return nil, apperror.Validation("X OAuth is not configured (X_CLIENT_ID/SECRET/REDIRECT_URI)")
+	}
+
+	// User-context connection scopes.
+	// offline.access enables refresh tokens.
+	scopes := []string{
+		"tweet.read",
+		"tweet.write",
+		"users.read",
+		"offline.access",
+	}
+
+	return &oauth2.Config{
+		ClientID:     strings.TrimSpace(u.xClientID),
+		ClientSecret: strings.TrimSpace(u.xClientSecret),
+		RedirectURL:  strings.TrimSpace(u.xRedirectURI),
+		Scopes:       scopes,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://twitter.com/i/oauth2/authorize",
+			TokenURL: "https://api.twitter.com/2/oauth2/token",
+		},
+	}, nil
+}
+
 func (u *integrationsUsecase) GoogleAuthURL(state string) (string, error) {
-	cfg, err := u.oauthConfig()
+	cfg, err := u.googleOAuthConfig()
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +121,7 @@ func (u *integrationsUsecase) GoogleAuthURL(state string) (string, error) {
 }
 
 func (u *integrationsUsecase) HandleGoogleCallback(ctx context.Context, code string) error {
-	cfg, err := u.oauthConfig()
+	cfg, err := u.googleOAuthConfig()
 	if err != nil {
 		return err
 	}
@@ -110,6 +145,55 @@ func (u *integrationsUsecase) HandleGoogleCallback(ctx context.Context, code str
 
 	// Persist tokens. Refresh token may be empty on subsequent authorizations; repo keeps the prior one.
 	return u.repo.UpsertGoogle(ctx, email, tok.RefreshToken, tok.AccessToken, expiry)
+}
+
+func (u *integrationsUsecase) XAuthURL(state, codeChallenge string) (string, error) {
+	cfg, err := u.xOAuthConfig()
+	if err != nil {
+		return "", err
+	}
+
+	// X requires PKCE parameters for OAuth2.
+	return cfg.AuthCodeURL(
+		state,
+		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		// Helps ensure we get a refresh token.
+		oauth2.SetAuthURLParam("prompt", "consent"),
+	), nil
+}
+
+func (u *integrationsUsecase) HandleXCallback(ctx context.Context, code, codeVerifier string) error {
+	cfg, err := u.xOAuthConfig()
+	if err != nil {
+		return err
+	}
+
+	tok, err := cfg.Exchange(
+		ctx,
+		code,
+		oauth2.SetAuthURLParam("code_verifier", codeVerifier),
+	)
+	if err != nil {
+		return apperror.ExternalError(err, "failed to exchange X OAuth code")
+	}
+
+	var expiry *time.Time
+	if !tok.Expiry.IsZero() {
+		e := tok.Expiry
+		expiry = &e
+	}
+
+	scope := ""
+	if v := tok.Extra("scope"); v != nil {
+		if s, ok := v.(string); ok {
+			scope = s
+		}
+	}
+
+	// Persist tokens for later tool calls.
+	// Note: tok.RefreshToken may be empty on subsequent authorizations; repo keeps the prior one.
+	return u.repo.UpsertXOAuth2(ctx, tok.AccessToken, tok.RefreshToken, expiry, scope)
 }
 
 func fetchGoogleEmail(ctx context.Context, accessToken string) (string, error) {
@@ -162,6 +246,18 @@ func (u *integrationsUsecase) GetStatus(ctx context.Context) (*domain.Integratio
 	status.Discord.WebhookMasked = maskSecret(integ.DiscordWebhookURL)
 	status.Discord.BotTokenMasked = maskSecret(integ.DiscordBotToken)
 
+	xOAuth1Configured := strings.TrimSpace(integ.XAPIKey) != "" &&
+		strings.TrimSpace(integ.XAPISecret) != "" &&
+		strings.TrimSpace(integ.XAccessToken) != "" &&
+		strings.TrimSpace(integ.XAccessTokenSecret) != ""
+	xBearerConfigured := strings.TrimSpace(integ.XBearerToken) != ""
+	xOAuth2Configured := strings.TrimSpace(integ.XOAuth2AccessToken) != "" || strings.TrimSpace(integ.XOAuth2RefreshToken) != ""
+	status.X.Configured = xOAuth1Configured || xBearerConfigured || xOAuth2Configured
+	status.X.APIKeyMasked = maskSecret(integ.XAPIKey)
+	status.X.AccessTokenMasked = maskSecret(integ.XAccessToken)
+	status.X.BearerTokenMasked = maskSecret(integ.XBearerToken)
+	status.X.OAuth2AccessTokenMasked = maskSecret(integ.XOAuth2AccessToken)
+
 	return &status, nil
 }
 
@@ -203,4 +299,41 @@ func (u *integrationsUsecase) UpsertDiscord(ctx context.Context, webhookURL, bot
 
 func (u *integrationsUsecase) DisconnectDiscord(ctx context.Context) error {
 	return u.repo.ClearDiscord(ctx)
+}
+
+func (u *integrationsUsecase) UpsertX(ctx context.Context, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken string) error {
+	apiKey = strings.TrimSpace(apiKey)
+	apiSecret = strings.TrimSpace(apiSecret)
+	accessToken = strings.TrimSpace(accessToken)
+	accessTokenSecret = strings.TrimSpace(accessTokenSecret)
+	bearerToken = strings.TrimSpace(bearerToken)
+
+	hasAny := apiKey != "" || apiSecret != "" || accessToken != "" || accessTokenSecret != "" || bearerToken != ""
+	if !hasAny {
+		return apperror.Validation("x_bearer_token or OAuth 1.0a credentials are required")
+	}
+
+	// OAuth 1.0a (user-context) requires all four fields.
+	// If the user provides only API key/secret (common when they only intend app-only bearer usage),
+	// we allow it as long as a bearer token is present.
+	anyOAuth1 := apiKey != "" || apiSecret != "" || accessToken != "" || accessTokenSecret != ""
+	if anyOAuth1 {
+		missingAny := apiKey == "" || apiSecret == "" || accessToken == "" || accessTokenSecret == ""
+		if missingAny {
+			// Allow partial OAuth1 only when we're configured for bearer usage.
+			if bearerToken == "" {
+				return apperror.Validation("x_api_key, x_api_secret, x_access_token, and x_access_token_secret are required for OAuth 1.0a")
+			}
+			// If access token pieces are provided, we assume they intended OAuth1 and should provide the full set.
+			if accessToken != "" || accessTokenSecret != "" {
+				return apperror.Validation("x_api_key, x_api_secret, x_access_token, and x_access_token_secret are required for OAuth 1.0a")
+			}
+		}
+	}
+
+	return u.repo.UpsertX(ctx, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken)
+}
+
+func (u *integrationsUsecase) DisconnectX(ctx context.Context) error {
+	return u.repo.ClearX(ctx)
 }

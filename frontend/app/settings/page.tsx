@@ -32,7 +32,6 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from "@/lib/constants";
-import apiClient from "@/src/services/api-client";
 import {
   DEFAULT_SIDEBAR_MENUS,
   SIDEBAR_MENU_ITEMS,
@@ -40,6 +39,7 @@ import {
 } from "@/src/lib/sidebar-menus";
 import { Footer } from "@/src/components/layout/footer";
 import { ThemeToggle } from "@/src/components/layout/theme-toggle";
+import { GoogleGIcon, XLogoIcon } from "@/src/components/icons/brands";
 
 export default function SettingsPage() {
   const { data: profile, isLoading: isLoadingProfile } = useProfile();
@@ -72,6 +72,20 @@ export default function SettingsPage() {
   const { mutate: waLogout, isPending: isLoggingOutWhatsApp } =
     useWhatsAppWebLogout();
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("x") === "connected") {
+      toast.success("X connected");
+      refetchIntegrations();
+      params.delete("x");
+      const next = params.toString();
+      const url = next
+        ? `${window.location.pathname}?${next}${window.location.hash}`
+        : `${window.location.pathname}${window.location.hash}`;
+      window.history.replaceState({}, "", url);
+    }
+  }, [refetchIntegrations]);
+
   const [formData, setFormData] = React.useState({
     name: "",
     email: "",
@@ -96,30 +110,6 @@ export default function SettingsPage() {
   const [telegramBotToken, setTelegramBotToken] = React.useState("");
   const [discordWebhookUrl, setDiscordWebhookUrl] = React.useState("");
   const [discordBotToken, setDiscordBotToken] = React.useState("");
-
-  const [peopleQuery, setPeopleQuery] = React.useState("");
-  const [peopleResults, setPeopleResults] = React.useState<any>(null);
-  const [driveQuery, setDriveQuery] = React.useState("");
-  const [driveResults, setDriveResults] = React.useState<any>(null);
-  const [ytStart, setYtStart] = React.useState("");
-  const [ytEnd, setYtEnd] = React.useState("");
-  const [ytResults, setYtResults] = React.useState<any>(null);
-  const [isGoogleToolLoading, setIsGoogleToolLoading] = React.useState(false);
-
-  const runGoogleTool = async <T,>(
-    fn: () => Promise<T>,
-    onSuccess: (val: T) => void,
-  ) => {
-    setIsGoogleToolLoading(true);
-    try {
-      const val = await fn();
-      onSuccess(val);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Request failed");
-    } finally {
-      setIsGoogleToolLoading(false);
-    }
-  };
 
   const persistSidebarMenus = React.useCallback(
     (next: Record<SidebarMenuKey, boolean>) => {
@@ -191,6 +181,10 @@ export default function SettingsPage() {
 
   const handleConnectGoogle = () => {
     window.location.href = API_ENDPOINTS.GOOGLE_CONNECT;
+  };
+
+  const handleConnectX = () => {
+    window.location.href = API_ENDPOINTS.X_CONNECT;
   };
 
   const handleDisconnectGoogle = () => {
@@ -293,7 +287,7 @@ export default function SettingsPage() {
     ? models.filter((m) => m.provider === selectedProvider)
     : [];
 
-  const configurableSidebarItems = SIDEBAR_MENU_ITEMS.filter((i) => !i.locked);
+  const sidebarItems = SIDEBAR_MENU_ITEMS;
 
   if (isLoadingProfile) {
     return (
@@ -491,9 +485,11 @@ export default function SettingsPage() {
                 </p>
 
                 <div className="space-y-2">
-                  {configurableSidebarItems.map((item) => {
+                  {sidebarItems.map((item) => {
                     const key = item.key as SidebarMenuKey;
-                    const checked = formData.sidebarMenus?.[key] !== false;
+                    const checked = item.locked
+                      ? true
+                      : formData.sidebarMenus?.[key] !== false;
 
                     return (
                       <div
@@ -512,7 +508,9 @@ export default function SettingsPage() {
 
                         <Switch
                           checked={checked}
+                          disabled={!!item.locked}
                           onCheckedChange={(v) => {
+                            if (item.locked) return;
                             setFormData((prev) => {
                               const nextMenus = {
                                 ...(prev.sidebarMenus || ({} as any)),
@@ -657,11 +655,9 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">
-                        Google (Gmail + Calendar + Contacts + Drive + YouTube)
-                      </p>
+                      <p className="text-sm font-medium">Google</p>
                       <p className="text-xs text-muted-foreground">
-                        Used by the agent tools and the Email/Calendar pages.
+                        Used by the agent tools and the Google pages.
                       </p>
                     </div>
                     {integrations?.google?.connected ? (
@@ -681,6 +677,7 @@ export default function SettingsPage() {
                         onClick={handleConnectGoogle}
                         disabled={isLoadingIntegrations}
                       >
+                        <GoogleGIcon className="mr-2 h-4 w-4" />
                         Connect Google
                       </Button>
                     )}
@@ -705,201 +702,6 @@ export default function SettingsPage() {
                       If you changed Google OAuth scopes/APIs recently,
                       disconnect and connect again.
                     </p>
-                  ) : null}
-
-                  {integrations?.google?.connected ? (
-                    <div className="pt-4 space-y-4">
-                      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
-                        <p className="text-sm font-medium">
-                          Contacts (People API)
-                        </p>
-                        <div className="flex gap-2">
-                          <Input
-                            value={peopleQuery}
-                            onChange={(e) => setPeopleQuery(e.target.value)}
-                            placeholder='Search contacts (e.g. "John")'
-                          />
-                          <Button
-                            variant="secondary"
-                            disabled={
-                              isGoogleToolLoading || !peopleQuery.trim()
-                            }
-                            onClick={() => {
-                              const qs = new URLSearchParams({
-                                q: peopleQuery,
-                                pageSize: "10",
-                              });
-                              runGoogleTool(
-                                () =>
-                                  apiClient.get(
-                                    `${API_ENDPOINTS.PEOPLE_SEARCH}?${qs.toString()}`,
-                                  ),
-                                (val) => setPeopleResults(val),
-                              );
-                            }}
-                          >
-                            Search
-                          </Button>
-                        </div>
-
-                        {peopleResults?.results?.length ? (
-                          <div className="space-y-2">
-                            {peopleResults.results
-                              .slice(0, 5)
-                              .map((r: any, idx: number) => {
-                                const person = r.person || {};
-                                const name =
-                                  (person.names &&
-                                    person.names[0]?.displayName) ||
-                                  "(no name)";
-                                const phone =
-                                  (person.phoneNumbers &&
-                                    person.phoneNumbers[0]?.value) ||
-                                  "";
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="rounded-md border border-border px-3 py-2"
-                                  >
-                                    <div className="text-sm font-medium">
-                                      {name}
-                                    </div>
-                                    {phone ? (
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        {phone}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        ) : peopleResults ? (
-                          <p className="text-xs text-muted-foreground">
-                            No results.
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
-                        <p className="text-sm font-medium">Drive</p>
-                        <div className="flex gap-2">
-                          <Input
-                            value={driveQuery}
-                            onChange={(e) => setDriveQuery(e.target.value)}
-                            placeholder='Search file name (e.g. "invoice")'
-                          />
-                          <Button
-                            variant="secondary"
-                            disabled={isGoogleToolLoading}
-                            onClick={() => {
-                              const qs = new URLSearchParams({
-                                q: driveQuery,
-                                pageSize: "10",
-                              });
-                              runGoogleTool(
-                                () =>
-                                  apiClient.get(
-                                    `${API_ENDPOINTS.DRIVE_SEARCH}?${qs.toString()}`,
-                                  ),
-                                (val) => setDriveResults(val),
-                              );
-                            }}
-                          >
-                            Search
-                          </Button>
-                        </div>
-
-                        {driveResults?.files?.length ? (
-                          <div className="space-y-2">
-                            {driveResults.files.slice(0, 5).map((f: any) => (
-                              <div
-                                key={f.id}
-                                className="rounded-md border border-border px-3 py-2"
-                              >
-                                <div className="text-sm font-medium truncate">
-                                  {f.webViewLink ? (
-                                    <a
-                                      href={f.webViewLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="hover:underline"
-                                    >
-                                      {f.name}
-                                    </a>
-                                  ) : (
-                                    f.name
-                                  )}
-                                </div>
-                                <div className="text-xs text-muted-foreground mt-1 truncate">
-                                  {f.mimeType}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : driveResults ? (
-                          <p className="text-xs text-muted-foreground">
-                            No results.
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
-                        <p className="text-sm font-medium">YouTube analytics</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Start</Label>
-                            <Input
-                              type="date"
-                              value={ytStart}
-                              onChange={(e) => setYtStart(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">End</Label>
-                            <Input
-                              type="date"
-                              value={ytEnd}
-                              onChange={(e) => setYtEnd(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="secondary"
-                            disabled={
-                              isGoogleToolLoading ||
-                              !ytStart.trim() ||
-                              !ytEnd.trim()
-                            }
-                            onClick={() => {
-                              const qs = new URLSearchParams({
-                                startDate: ytStart,
-                                endDate: ytEnd,
-                              });
-                              runGoogleTool(
-                                () =>
-                                  apiClient.get(
-                                    `${API_ENDPOINTS.YOUTUBE_ANALYTICS}?${qs.toString()}`,
-                                  ),
-                                (val) => setYtResults(val),
-                              );
-                            }}
-                          >
-                            Load
-                          </Button>
-                        </div>
-
-                        {ytResults ? (
-                          <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
-                            {JSON.stringify(
-                              ytResults?.report || ytResults,
-                              null,
-                              2,
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
                   ) : null}
                 </div>
 
@@ -1035,6 +837,44 @@ export default function SettingsPage() {
                         </Button>
                       </div>
                     </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* X */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">X</p>
+                      <p className="text-xs text-muted-foreground">
+                        Connect your X account via OAuth.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleConnectX}
+                      disabled={isLoadingIntegrations}
+                    >
+                      Connect X
+                    </Button>
+                  </div>
+
+                  {isLoadingIntegrations ? (
+                    <p className="text-xs text-muted-foreground">
+                      Loading status…
+                    </p>
+                  ) : integrations?.x?.configured ? (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <div>Status: Connected</div>
+                      <div>
+                        OAuth2 token:{" "}
+                        {integrations.x.oauth2AccessTokenMasked || ""}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Not connected
+                    </p>
                   )}
                 </div>
 

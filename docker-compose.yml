@@ -55,6 +55,7 @@ services:
       DB_NAME: axis_assistant
       DB_SSLMODE: disable
       AI_ORCHESTRATOR_URL: http://agent:8000
+      WHATSAPP_BOT_URL: http://whatsapp_bot:3100
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-}
@@ -81,5 +82,45 @@ services:
     depends_on:
       - backend
 
+  # ---------- WhatsApp Web Bot (Baileys / QR scan) ----------
+  whatsapp_bot:
+    build:
+      context: ./whatsapp_bot
+      dockerfile: Dockerfile
+    container_name: axis-whatsapp-bot
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      WHATSAPP_BOT_HOST: "0.0.0.0"
+      WHATSAPP_BOT_PORT: "3100"
+      WHATSAPP_BOT_AUTH_DIR: /app/auth
+      WHATSAPP_DEFAULT_COUNTRY_CODE: ${WHATSAPP_DEFAULT_COUNTRY_CODE:-62}
+      # Forward inbound messages to backend Activities.
+      WHATSAPP_BACKEND_URL: http://backend:8080
+      WHATSAPP_BACKEND_API_KEY: ${API_KEY:-change-me-to-a-strong-secret}
+    volumes:
+      - whatsapp_auth:/app/auth
+    depends_on:
+      - backend
+
+  # ---------- Next.js Frontend Dashboard ----------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: axis-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # The Next.js server uses this for rewrites -> backend
+      BACKEND_URL: http://backend:8080
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:
+  whatsapp_auth:

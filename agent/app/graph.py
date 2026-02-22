@@ -26,10 +26,55 @@ from app.nodes.memory_update import memory_update
 from app.nodes.response import response_node
 from app.nodes.activity_log import activity_log
 from app.nodes.conversation import conversation_node
+from app.nodes.mental_conversation import mental_conversation_node
 
 
 
 # ---------- conditional edges ----------
+
+def _looks_like_mental_chat(state: AxisState) -> bool:
+    msg = (state.user_input or "").lower()
+    keywords = (
+        "anxious",
+        "anxiety",
+        "panic",
+        "panic attack",
+        "stressed",
+        "stress",
+        "overwhelmed",
+        "burnout",
+        "sad",
+        "depressed",
+        "depression",
+        "lonely",
+        "grief",
+        "overthinking",
+        "ruminating",
+        "rumination",
+        "can't sleep",
+        "cannot sleep",
+        "insomnia",
+        "therapy",
+        "therapist",
+        "mental health",
+        "coping",
+        "grounding",
+        "mindfulness",
+        "intrusive thoughts",
+    )
+
+    if any(k in msg for k in keywords):
+        return True
+
+    # If recent context shows the same theme, stay in this mode.
+    for mem in (state.short_term_memory or [])[-6:]:
+        if (mem or {}).get("role") != "user":
+            continue
+        prior = str((mem or {}).get("message") or "").lower()
+        if any(k in prior for k in keywords):
+            return True
+
+    return False
 
 def _after_guardrail(state: AxisState) -> str:
     """Route after guardrail check."""
@@ -38,7 +83,7 @@ def _after_guardrail(state: AxisState) -> str:
 
     # Pure chat: use the dedicated conversation node.
     if state.intent == "CHAT":
-        return "conversation"
+        return "mental_conversation" if _looks_like_mental_chat(state) else "conversation"
 
     msg = (state.user_input or "").lower()
 
@@ -90,6 +135,7 @@ def build_graph() -> StateGraph:
     graph.add_node("execution", execution)
     graph.add_node("activity_log", activity_log)
     graph.add_node("conversation", conversation_node)
+    graph.add_node("mental_conversation", mental_conversation_node)
     graph.add_node("response", response_node)
     graph.add_node("memory_update", memory_update)
 
@@ -102,6 +148,7 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges("guardrail", _after_guardrail, {
         "response": "response",
         "conversation": "conversation",
+        "mental_conversation": "mental_conversation",
         "planning_main": "planning_main",
         "planning_gmail": "planning_gmail",
         "planning_calendar": "planning_calendar",
@@ -112,6 +159,7 @@ def build_graph() -> StateGraph:
 
     # Chat path: conversation → memory update → END
     graph.add_edge("conversation", "memory_update")
+    graph.add_edge("mental_conversation", "memory_update")
 
     graph.add_edge("planning_main", "plan_validation")
     graph.add_edge("planning_gmail", "plan_validation")

@@ -12,16 +12,26 @@ export interface ActivityQueryParams {
 type BackendActivityLog = {
   id: string;
   session_id?: string;
-  user_query: string;
+  user_query?: string;
   intent: string;
   execution_plan?: string; // base64
   tools_used?: string; // base64
   execution_results?: string; // base64
   success: boolean;
   error_message?: string;
-  latency_ms: number;
-  token_usage: number;
-  created_at: string;
+  latency_ms?: number;
+  token_usage?: number;
+  created_at?: string;
+
+  sessionId?: string;
+  userQuery?: string;
+  executionPlan?: string;
+  toolsUsed?: string;
+  executionResults?: string;
+  errorMessage?: string;
+  latencyMs?: number;
+  tokenUsage?: number;
+  createdAt?: string;
 };
 
 function safeJsonParse<T>(input: string): T | undefined {
@@ -33,28 +43,31 @@ function safeJsonParse<T>(input: string): T | undefined {
 }
 
 function mapActivity(a: BackendActivityLog): ActivityLog {
-  const tools = a.tools_used
-    ? safeJsonParse<string[]>(base64DecodeToUtf8(a.tools_used))
+  const toolsUsedBase64 = a.toolsUsed ?? a.tools_used;
+  const tools = toolsUsedBase64
+    ? safeJsonParse<string[]>(base64DecodeToUtf8(toolsUsedBase64))
     : undefined;
-  const executionPlan = a.execution_plan
-    ? base64DecodeToUtf8(a.execution_plan)
+  const executionPlanBase64 = a.executionPlan ?? a.execution_plan;
+  const executionPlan = executionPlanBase64
+    ? base64DecodeToUtf8(executionPlanBase64)
     : undefined;
-  const executionResults = a.execution_results
-    ? base64DecodeToUtf8(a.execution_results)
+  const executionResultsBase64 = a.executionResults ?? a.execution_results;
+  const executionResults = executionResultsBase64
+    ? base64DecodeToUtf8(executionResultsBase64)
     : undefined;
 
   return {
     id: a.id,
-    sessionId: a.session_id || "",
-    query: a.user_query,
+    sessionId: a.sessionId ?? a.session_id ?? "",
+    query: a.userQuery ?? a.user_query ?? "",
     intent: a.intent,
     tools: tools || [],
     success: a.success,
-    error: a.error_message,
-    latency: a.latency_ms,
+    error: a.errorMessage ?? a.error_message,
+    latency: a.latencyMs ?? a.latency_ms ?? 0,
     executionPlan,
     executionResults,
-    createdAt: a.created_at,
+    createdAt: a.createdAt ?? a.created_at ?? "",
   };
 }
 

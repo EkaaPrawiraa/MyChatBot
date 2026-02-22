@@ -233,6 +233,44 @@ class BackendClient:
             params={"startDate": start_date, "endDate": end_date},
         )
 
+    async def web_search(self, query: str, max_results: int = 5) -> dict:
+        params = {"q": query, "maxResults": max_results}
+        return await self._get(
+            "/api/v1/internal/tools/web/search",
+            params=params,
+        )
+
+    async def web_fetch(self, url: str, max_bytes: int = 20000) -> dict:
+        params = {"url": url, "maxBytes": max_bytes}
+        return await self._get(
+            "/api/v1/internal/tools/web/fetch",
+            params=params,
+        )
+
+    # ---------- tools (x) ----------
+
+    async def x_me(self) -> dict:
+        return await self._get("/api/v1/internal/tools/x/me")
+
+    async def x_my_tweets(self, limit: int = 10) -> dict:
+        return await self._get(
+            "/api/v1/internal/tools/x/my-tweets",
+            params={"limit": limit},
+        )
+
+    async def x_search(self, query: str, max_results: int = 10) -> dict:
+        params = {"q": query, "maxResults": max_results}
+        return await self._get(
+            "/api/v1/internal/tools/x/search",
+            params=params,
+        )
+
+    async def x_tweet(self, text: str) -> dict:
+        return await self._post(
+            "/api/v1/internal/tools/x/tweet",
+            json={"text": text},
+        )
+
 
 # Singleton
 backend = BackendClient()

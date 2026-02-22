@@ -22,6 +22,26 @@ function isApiResponse<T>(payload: unknown): payload is ApiResponse<T> {
   return isObject(payload) && typeof payload.success === "boolean";
 }
 
+function toCamelCaseKey(key: string): string {
+  return key.replace(/_([a-zA-Z0-9])/g, (_, ch: string) => ch.toUpperCase());
+}
+
+function camelizeKeysDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => camelizeKeysDeep(v)) as T;
+  }
+
+  if (!isObject(value)) {
+    return value;
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[toCamelCaseKey(k)] = camelizeKeysDeep(v);
+  }
+  return out as T;
+}
+
 export class APIClient {
   private baseUrl: string;
   private apiKey: string;
@@ -63,7 +83,7 @@ export class APIClient {
     // Go backend uses: { success, data, error, meta }
     if (isApiResponse<T>(payload)) {
       const envelope = payload;
-      if (envelope.success) return envelope.data as T;
+      if (envelope.success) return camelizeKeysDeep(envelope.data as T);
 
       const message = envelope.error?.message || "Request failed";
       throw new Error(message);
@@ -71,10 +91,10 @@ export class APIClient {
 
     // Some older/other endpoints may use: { status, data, message }
     if (isObject(payload) && "data" in payload) {
-      return (payload as { data: T }).data;
+      return camelizeKeysDeep((payload as { data: T }).data);
     }
 
-    return payload as T;
+    return camelizeKeysDeep(payload as T);
   }
 
   async request<T>(

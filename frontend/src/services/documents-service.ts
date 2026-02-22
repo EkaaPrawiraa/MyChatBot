@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from "@/lib/constants";
 
 export type DocumentsSummarizeResponse = {
   summary: string;
+  latencyMs?: number;
   latency_ms?: number;
 };
 

@@ -163,6 +163,18 @@
   }
 }
 
+@layer utilities {
+  .scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE 10+ */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+  }
+}
+
 /* Keyframe animations */
 
 @keyframes shimmer {

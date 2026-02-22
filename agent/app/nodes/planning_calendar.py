@@ -29,6 +29,7 @@ Available tools (call the Go backend):
 
 # Reminders
 - reminder.create: {"title": str, "description": str, "scheduled_at": "RFC3339 datetime", "sent_via": ""}
+    - If the user asks to send the reminder via WhatsApp at the scheduled time, set sent_via to: "whatsapp:<phone>" (no spaces).
 
 Guidance:
 - For QUERY_ONLY calendar questions, prefer calendar.list or calendar.availability.

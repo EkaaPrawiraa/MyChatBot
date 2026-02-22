@@ -35,6 +35,7 @@ let latestQRAt = null;
 let connected = false;
 let connectionState = "unknown";
 let me = null;
+let warnedMissingBackendConfig = false;
 
 function extractTextMessage(msg) {
   if (!msg) return "";
@@ -51,7 +52,19 @@ function extractTextMessage(msg) {
 }
 
 async function postInboundToBackend(payload) {
-  if (!BACKEND_URL || !BACKEND_API_KEY) return;
+  if (!BACKEND_URL || !BACKEND_API_KEY) {
+    if (!warnedMissingBackendConfig) {
+      warnedMissingBackendConfig = true;
+      logger.warn(
+        {
+          has_backend_url: !!BACKEND_URL,
+          has_backend_api_key: !!BACKEND_API_KEY,
+        },
+        "WHATSAPP_BACKEND_URL / WHATSAPP_BACKEND_API_KEY not set; inbound messages will not show in the dashboard",
+      );
+    }
+    return;
+  }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);

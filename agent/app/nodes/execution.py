@@ -12,6 +12,7 @@ import re
 from app.errors import CODE_EXECUTION_FAILED
 from app.models.state import AxisState
 from app.services.backend_client import backend
+from app.services.web_search_ddg import web_search_ddg
 
 
 _WHATSAPP_TO_PLACEHOLDERS = {
@@ -241,6 +242,43 @@ async def _execute_step(tool: str, input_data: dict) -> dict:
         start_date = str(input_data.get("startDate") or input_data.get("start_date") or "").strip()
         end_date = str(input_data.get("endDate") or input_data.get("end_date") or "").strip()
         resp = await backend.youtube_analytics(start_date=start_date, end_date=end_date)
+        return resp.get("data") or {}
+
+    # Web
+    if tool == "web.search":
+        query = str(input_data.get("query") or input_data.get("q") or "").strip()
+        max_results = int(input_data.get("maxResults") or input_data.get("max_results") or 5)
+        return await web_search_ddg(query=query, max_results=max_results)
+
+    if tool == "web.fetch":
+        url = str(input_data.get("url") or "").strip()
+        max_bytes = int(input_data.get("maxBytes") or input_data.get("max_bytes") or 20000)
+        resp = await backend.web_fetch(url=url, max_bytes=max_bytes)
+        return resp.get("data") or {}
+
+    # X
+    if tool == "x.me":
+        resp = await backend.x_me()
+        return resp.get("data") or {}
+
+    if tool == "x.my_tweets":
+        limit = int(input_data.get("limit") or input_data.get("maxResults") or 10)
+        resp = await backend.x_my_tweets(limit=limit)
+        return resp.get("data") or {}
+
+    if tool == "x.search":
+        query = str(input_data.get("query") or input_data.get("q") or "").strip()
+        if not query:
+            raise ValueError("x.search requires non-empty query")
+        max_results = int(input_data.get("maxResults") or input_data.get("max_results") or 10)
+        resp = await backend.x_search(query=query, max_results=max_results)
+        return resp.get("data") or {}
+
+    if tool == "x.tweet":
+        text = str(input_data.get("text") or input_data.get("message") or "").strip()
+        if not text:
+            raise ValueError("x.tweet requires non-empty text")
+        resp = await backend.x_tweet(text=text)
         return resp.get("data") or {}
 
     # Reminders

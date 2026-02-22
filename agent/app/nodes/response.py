@@ -35,7 +35,64 @@ Behavior:
 - If no tools were executed (or execution results are empty), do not imply actions were taken.
 - If tools were executed, briefly summarise what happened and the outcome.
 - If an error occurred, explain what failed and what to do next.
+
+Tool semantics (important):
+- reminder.create ONLY schedules a reminder. Do NOT say the reminder was delivered/sent unless there is a separate successful whatsapp.send (or other send tool) execution.
+- whatsapp.send means a WhatsApp message send was attempted; if it failed in execution results, say it failed.
+
+Web search semantics:
+- If web.search returns results but includes warnings, you MUST still use the results to answer.
+- Briefly mention the fallback source (e.g. wikipedia_opensearch) when relevant.
 """
+
+
+def _summarize_execution_results(execution_results: list[dict]) -> str:
+    lines: list[str] = []
+
+    for step in execution_results:
+        tool = str(step.get("tool") or "").strip()
+        success = step.get("success") is True
+
+        if not tool:
+            continue
+
+        if not success:
+            err = str(step.get("error") or "").strip()
+            if err:
+                lines.append(f"{tool} failed: {err}")
+            else:
+                lines.append(f"{tool} failed")
+            continue
+
+        result = step.get("result")
+
+        if tool == "web.search" and isinstance(result, dict):
+            source = str(result.get("source") or "").strip() or "unknown"
+            warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+            results = result.get("results") if isinstance(result.get("results"), list) else []
+            lines.append(
+                f"web.search succeeded (source={source}, results={len(results)}, warnings={len(warnings)})."
+            )
+            # Include a few top results so the LLM can answer even if the raw JSON gets truncated.
+            for i, item in enumerate(results[:3], start=1):
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or "").strip()
+                url = str(item.get("url") or "").strip()
+                if title and url:
+                    lines.append(f"{i}. {title} — {url}")
+                elif url:
+                    lines.append(f"{i}. {url}")
+
+            if warnings:
+                # Keep warnings short; they can be long (network errors).
+                joined = "; ".join(str(w).strip() for w in warnings[:2] if str(w).strip())
+                if joined:
+                    lines.append(f"Warnings: {joined}")
+        else:
+            lines.append(f"{tool} succeeded")
+
+    return "\n".join(lines)
 
 
 async def response_node(state: AxisState) -> dict:
@@ -127,7 +184,11 @@ async def response_node(state: AxisState) -> dict:
 
     if state.execution_results:
         context_parts.append(
-            f"Execution results: {json.dumps(state.execution_results, default=str)[:800]}"
+            "Execution summary:\n" + _summarize_execution_results(state.execution_results)
+        )
+        # Keep a small raw payload for edge cases, but avoid truncating away the useful bits.
+        context_parts.append(
+            f"Execution results (raw, truncated): {json.dumps(state.execution_results, default=str)[:500]}"
         )
 
     if state.error:

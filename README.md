@@ -166,6 +166,18 @@ This is the simplest way to run the stack locally.
 - **Python** (for agent, with venv)
 - **Node.js + npm** (for frontend + WhatsApp bot)
 
+### Option A (recommended): “Single click” Launcher + Docker Compose
+
+1. Start the Launcher:
+
+- macOS/Linux: `./scripts/run_launcher.sh`
+- Windows (PowerShell): `powershell -ExecutionPolicy Bypass -File .\scripts\run_launcher.ps1`
+- Windows (CMD): `scripts\run_launcher.bat`
+
+2. Open `http://127.0.0.1:4187`, fill env values, then click **Start**.
+
+3. Open the app at `http://localhost:3000`.
+
 ### 1) Clone
 
 ```bash

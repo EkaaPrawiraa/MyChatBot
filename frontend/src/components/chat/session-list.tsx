@@ -55,71 +55,83 @@ export function SessionList({
               No sessions yet. Create one to start.
             </div>
           ) : (
-            sessions.map((session) => (
-              <div
-                key={session.id}
-                className={cn(
-                  "group relative px-3 py-2 rounded-lg transition-all duration-200",
-                  activeSessionId === session.id
-                    ? "nav-active"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                )}
-              >
-                <Link
-                  href={`/chat?session=${session.id}`}
-                  className="block cursor-pointer"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {session.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(session.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </p>
-                    </div>
-                    {session.closed && (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        Closed
-                      </span>
-                    )}
-                  </div>
-                </Link>
+            sessions.map((session) =>
+              (() => {
+                const createdAtDate = session.createdAt
+                  ? new Date(session.createdAt)
+                  : null;
+                const createdAtLabel =
+                  createdAtDate && !Number.isNaN(createdAtDate.getTime())
+                    ? formatDistanceToNow(createdAtDate, {
+                        addSuffix: true,
+                      })
+                    : "";
 
-                {/* Session Actions */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      <MoreVertical size={16} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {!session.closed && (
-                      <DropdownMenuItem
-                        onClick={() => onCloseSession(session.id)}
-                      >
-                        <XCircle size={16} className="mr-2" />
-                        Close
-                      </DropdownMenuItem>
+                return (
+                  <div
+                    key={session.id}
+                    className={cn(
+                      "group relative px-3 py-2 rounded-lg transition-all duration-200",
+                      activeSessionId === session.id
+                        ? "nav-active"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent",
                     )}
-                    <DropdownMenuItem
-                      onClick={() => onDeleteSession(session.id)}
-                      className="text-destructive focus:text-destructive"
+                  >
+                    <Link
+                      href={`/chat?session=${session.id}`}
+                      className="block cursor-pointer"
                     >
-                      <Trash2 size={16} className="mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {session.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {createdAtLabel || ""}
+                          </p>
+                        </div>
+                        {session.closed && (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            Closed
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Session Actions */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {!session.closed && (
+                          <DropdownMenuItem
+                            onClick={() => onCloseSession(session.id)}
+                          >
+                            <XCircle size={16} className="mr-2" />
+                            Close
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => onDeleteSession(session.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 size={16} className="mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })(),
+            )
           )}
         </div>
       </ScrollArea>

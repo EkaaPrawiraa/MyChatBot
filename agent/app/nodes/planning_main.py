@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
+import re
+from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -50,6 +52,16 @@ Tool input schemas (use these keys):
 # YouTube
 - youtube.analytics: {"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}
 
+# Web
+- web.search: {"query": str, "max_results": int}
+- web.fetch: {"url": str, "max_bytes": int}
+
+# X
+- x.me: {}
+- x.my_tweets: {"limit": int}
+- x.search: {"query": str, "max_results": int}
+- x.tweet: {"text": str}
+
 # WhatsApp
 - whatsapp.send: {"to": str, "message": str}
 
@@ -64,9 +76,13 @@ Guidance:
     - For a native Google Doc, use drive.create_google_doc.
     - For a native Google Sheet, use drive.create_google_sheet.
 
+- If the user asks to look something up on Twitter/X (e.g. "what are people saying about <topic> on X"), use x.search (read-only). If X is not connected, fall back to web.search.
+
 # Reminders
 - reminder.create: {"title": str, "description": str, "scheduled_at": "RFC3339 datetime", "sent_via": ""}
-    - scheduled_at MUST be RFC3339 (e.g. 2026-02-20T15:04:05Z)
+        - scheduled_at MUST be RFC3339 (e.g. 2026-02-20T15:04:05Z)
+        - If the user asks to send the reminder via WhatsApp at the scheduled time, set sent_via to: "whatsapp:<phone>".
+            Example: "whatsapp:085121011803". (Do NOT include spaces.)
 
 # Memory
 - memory.store: {"content": str, "category": str, "source": str}
@@ -81,7 +97,7 @@ Respond ONLY with valid JSON:
 
 Approvals are disabled in this system. Do NOT ask for or require approvals.
 If the intent is CHAT, return an empty steps array.
-If the intent is QUERY_ONLY, you MAY return read-only tool steps when helpful (gmail.unread/search/categorized_unread, calendar.list/availability, people.search, drive.search, drive.export, youtube.analytics).
+If the intent is QUERY_ONLY, you MAY return read-only tool steps when helpful (gmail.unread/search/categorized_unread, calendar.list/availability, people.search, drive.search, drive.export, youtube.analytics, web.search, web.fetch, x.me, x.my_tweets, x.search).
 If the intent is MEMORY_WRITE, you MUST return exactly one step using memory.store.
 """
 
@@ -98,7 +114,11 @@ def _to_bool(value: object, default: bool) -> bool:
     return default
 
 
-async def planning_main(state: AxisState) -> dict:
+async def planning_main(
+    state: AxisState,
+    *,
+    llm_factory: Callable[..., object] = create_llm,
+) -> dict:
     """Generate an execution plan from the user's request."""
 
     # Skip planning for pure chat.
@@ -107,7 +127,57 @@ async def planning_main(state: AxisState) -> dict:
 
     # Deterministic read-only plan for common calendar lookups.
     if state.intent == "QUERY_ONLY":
-        msg_lower = (state.user_input or "").lower()
+        user_msg = (state.user_input or "").strip()
+        msg_lower = user_msg.lower()
+
+        def _extract_search_query(message: str) -> str:
+            m = message.strip()
+            if not m:
+                return m
+
+            # Strip common prefixes to keep the query clean.
+            m = re.sub(r"^\s*(web\s*search|search\s+about|search\s+for|search|find|look\s+up)\s+", "", m, flags=re.I)
+            # Strip common suffix phrasing.
+            m = re.sub(r"\s*(in\s+latest\s+news|latest\s+news|in\s+the\s+news|news)\s*$", "", m, flags=re.I)
+            return m.strip() or message.strip()
+
+        # If the user asks for analysis of THEIR X profile, ground it with X tools.
+        # This avoids generic responses like "I can't access X" when X is connected.
+        if (
+            (" x " in f" {msg_lower} " or "twitter" in msg_lower)
+            and "profile" in msg_lower
+            and any(k in msg_lower for k in ("analyze", "analyse", "review", "audit", "check"))
+        ):
+            return {
+                "plan": [
+                    PlanStep(tool="x.me", input={}),
+                    PlanStep(tool="x.my_tweets", input={"limit": 20}),
+                ],
+                "requires_approval": False,
+            }
+
+        # If the user asks for latest news/current events, use web.search (NOT Gmail).
+        if any(k in msg_lower for k in ("latest news", "breaking", "headline", "current events", "recent news")) or (
+            ("news" in msg_lower) and any(k in msg_lower for k in ("search", "find", "look up", "what's new", "whats new"))
+        ):
+            query = _extract_search_query(user_msg)
+            return {
+                "plan": [
+                    PlanStep(tool="web.search", input={"query": query, "max_results": 5}),
+                ],
+                "requires_approval": False,
+            }
+
+        # Explicit web search request.
+        if "websearch" in msg_lower or "web search" in msg_lower:
+            query = _extract_search_query(user_msg)
+            return {
+                "plan": [
+                    PlanStep(tool="web.search", input={"query": query, "max_results": 5}),
+                ],
+                "requires_approval": False,
+            }
+
         if any(k in msg_lower for k in ("meeting", "calendar", "schedule", "event", "appointment")):
             try:
                 now = (
@@ -155,7 +225,7 @@ async def planning_main(state: AxisState) -> dict:
     else:
         skill_prompt = "AI skill: BALANCED (high priority). Plan what's needed without overkill."
 
-    llm = create_llm(
+    llm = llm_factory(
         profile=state.owner_profile,
         temperature=0,
         max_tokens=max_tokens,

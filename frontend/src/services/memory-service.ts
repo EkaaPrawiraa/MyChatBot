@@ -12,16 +12,18 @@ type BackendLongTermMemory = {
   content: string;
   category: string;
   metadata?: unknown;
-  created_at: string;
+  created_at?: string;
+  createdAt?: string;
 };
 
 function mapMemory(m: BackendLongTermMemory): LongTermMemory {
+  const createdAt = m.createdAt ?? m.created_at ?? "";
   return {
     id: m.id,
     content: m.content,
     category: m.category,
-    createdAt: m.created_at,
-    updatedAt: m.created_at,
+    createdAt,
+    updatedAt: createdAt,
   };
 }
 

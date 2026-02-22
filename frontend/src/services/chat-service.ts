@@ -11,10 +11,15 @@ import { base64DecodeToUtf8 } from "@/lib/base64";
 type BackendChatResponse = {
   reply: string;
   intent?: string;
-  requires_approval: boolean;
+  requires_approval?: boolean;
   approval_id?: string;
   tools_used?: string; // base64-encoded JSON ([]byte)
   latency_ms?: number;
+
+  requiresApproval?: boolean;
+  approvalId?: string;
+  toolsUsed?: string;
+  latencyMs?: number;
 };
 
 export const chatService = {
@@ -28,11 +33,10 @@ export const chatService = {
     );
 
     let toolsUsed: string[] | undefined;
-    if (backend.tools_used) {
+    const toolsUsedBase64 = backend.toolsUsed ?? backend.tools_used;
+    if (toolsUsedBase64) {
       try {
-        toolsUsed = JSON.parse(
-          base64DecodeToUtf8(backend.tools_used),
-        ) as string[];
+        toolsUsed = JSON.parse(base64DecodeToUtf8(toolsUsedBase64)) as string[];
       } catch {
         toolsUsed = undefined;
       }
@@ -44,9 +48,11 @@ export const chatService = {
       message: backend.reply,
       intent: backend.intent,
       toolsUsed,
-      latency: backend.latency_ms ?? 0,
-      requiresApproval: Boolean(backend.requires_approval),
-      approvalId: backend.approval_id,
+      latency: backend.latencyMs ?? backend.latency_ms ?? 0,
+      requiresApproval: Boolean(
+        backend.requiresApproval ?? backend.requires_approval,
+      ),
+      approvalId: backend.approvalId ?? backend.approval_id,
     };
   },
 
@@ -59,6 +65,7 @@ export const chatService = {
     const backend = await apiClient.request<{
       transcription: string;
       latency_ms?: number;
+      latencyMs?: number;
     }>(API_ENDPOINTS.VOICE, {
       method: "POST",
       body: formData,
@@ -66,7 +73,7 @@ export const chatService = {
 
     return {
       transcription: backend.transcription,
-      latencyMs: backend.latency_ms,
+      latencyMs: backend.latencyMs ?? backend.latency_ms,
     };
   },
 };

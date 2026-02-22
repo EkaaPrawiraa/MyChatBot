@@ -97,6 +97,10 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		api.POST("/integrations/telegram/disconnect", h.Integrations.TelegramDisconnect)
 		api.PUT("/integrations/discord", h.Integrations.DiscordUpsert)
 		api.POST("/integrations/discord/disconnect", h.Integrations.DiscordDisconnect)
+		api.GET("/integrations/x/connect", h.Integrations.XConnect)
+		api.GET("/integrations/x/callback", h.Integrations.XCallback)
+		api.PUT("/integrations/x", h.Integrations.XUpsert)
+		api.POST("/integrations/x/disconnect", h.Integrations.XDisconnect)
 
 		// Gmail (dashboard-facing)
 		api.GET("/gmail/unread", h.Tools.GmailUnread)
@@ -120,6 +124,16 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		api.POST("/drive/create-sheet", h.Tools.DriveCreateGoogleSheet)
 		api.POST("/documents/summarize", h.Documents.Summarize)
 		api.GET("/youtube/analytics", h.Tools.YouTubeAnalytics)
+
+		// Web (dashboard-facing)
+		api.GET("/web/search", h.Tools.WebSearch)
+		api.GET("/web/fetch", h.Tools.WebFetch)
+
+		// X (dashboard-facing)
+		api.GET("/x/me", h.Tools.XMe)
+		api.GET("/x/my-tweets", h.Tools.XMyTweets)
+		api.GET("/x/search", h.Tools.XSearch)
+		api.POST("/x/tweet", h.Tools.XTweet)
 
 		// WhatsApp (dashboard-facing)
 		api.POST("/whatsapp/send", h.Tools.WhatsAppSend)
@@ -179,5 +193,11 @@ func Setup(r *gin.Engine, apiKey string, h Handlers) {
 		internal.POST("/tools/drive/create-doc", h.Tools.DriveCreateGoogleDoc)
 		internal.POST("/tools/drive/create-sheet", h.Tools.DriveCreateGoogleSheet)
 		internal.GET("/tools/youtube/analytics", h.Tools.YouTubeAnalytics)
+		internal.GET("/tools/web/search", h.Tools.WebSearch)
+		internal.GET("/tools/web/fetch", h.Tools.WebFetch)
+		internal.GET("/tools/x/me", h.Tools.XMe)
+		internal.GET("/tools/x/my-tweets", h.Tools.XMyTweets)
+		internal.GET("/tools/x/search", h.Tools.XSearch)
+		internal.POST("/tools/x/tweet", h.Tools.XTweet)
 	}
 }

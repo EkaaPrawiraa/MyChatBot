@@ -24,9 +24,14 @@ type IntegrationsUsecase interface {
 	DisconnectTelegram(ctx context.Context) error
 	UpsertDiscord(ctx context.Context, webhookURL, botToken string) error
 	DisconnectDiscord(ctx context.Context) error
+	UpsertX(ctx context.Context, apiKey, apiSecret, accessToken, accessTokenSecret, bearerToken string) error
+	DisconnectX(ctx context.Context) error
 	// Google OAuth flow
 	GoogleAuthURL(state string) (string, error)
 	HandleGoogleCallback(ctx context.Context, code string) error
+	// X OAuth2 flow
+	XAuthURL(state, codeChallenge string) (string, error)
+	HandleXCallback(ctx context.Context, code, codeVerifier string) error
 }
 
 // ToolsUsecase exposes real tool operations used by the Python orchestrator.
@@ -47,10 +52,17 @@ type ToolsUsecase interface {
 	DriveCreateGoogleDoc(ctx context.Context, name string, content string, parentID string) (any, error)
 	DriveCreateGoogleSheet(ctx context.Context, name string, csvContent string, parentID string) (any, error)
 	YouTubeAnalytics(ctx context.Context, startDate string, endDate string) (any, error)
+	WebSearch(ctx context.Context, query string, maxResults int) (any, error)
+	WebFetch(ctx context.Context, pageURL string, maxBytes int) (any, error)
 	WhatsAppSend(ctx context.Context, to, message string) (any, error)
 	TelegramSend(ctx context.Context, chatID, message string) (any, error)
 	TelegramUpdates(ctx context.Context, offset int, limit int, timeoutSeconds int) (any, error)
 	DiscordWebhookSend(ctx context.Context, content string, username string) (any, error)
+	// X
+	XMe(ctx context.Context) (any, error)
+	XMyTweets(ctx context.Context, limit int) (any, error)
+	XSearch(ctx context.Context, query string, maxResults int) (any, error)
+	XTweet(ctx context.Context, text string) (any, error)
 }
 
 // SessionUsecase manages conversation sessions.

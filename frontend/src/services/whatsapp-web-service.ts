@@ -7,6 +7,10 @@ export interface WhatsAppWebStatus {
     id?: string;
     name?: string;
   } | null;
+  // Prefer camelCase (apiClient camelizes responses), but keep snake_case
+  // as optional for backwards compatibility.
+  qrAvailable?: boolean;
+  qrUpdatedAt?: string | null;
   qr_available?: boolean;
   qr_updated_at?: string | null;
 }

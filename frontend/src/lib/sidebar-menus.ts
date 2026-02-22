@@ -10,7 +10,9 @@ import {
   Settings,
   Youtube,
   Share2,
+  Globe,
 } from "lucide-react";
+import { XLogoIcon } from "@/src/components/icons/brands";
 
 export type SidebarMenuKey =
   | "dashboard"
@@ -21,7 +23,9 @@ export type SidebarMenuKey =
   | "contacts"
   | "documents"
   | "youtubeAnalytics"
+  | "webSearch"
   | "social"
+  | "x"
   | "memory"
   | "automations"
   | "email"
@@ -66,7 +70,9 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
     href: "/youtube-analytics",
     icon: Youtube,
   },
+  { key: "webSearch", label: "Web Search", href: "/web-search", icon: Globe },
   { key: "social", label: "Social", href: "/social", icon: Share2 },
+  { key: "x", label: "X", href: "/x", icon: XLogoIcon },
   { key: "memory", label: "Memory", href: "/memory", icon: Brain },
   { key: "automations", label: "Automations", href: "/automations", icon: Zap },
   { key: "email", label: "Email", href: "/email", icon: MessageSquare },
@@ -94,7 +100,9 @@ export const DEFAULT_SIDEBAR_MENUS: Record<SidebarMenuKey, boolean> = {
   contacts: true,
   documents: true,
   youtubeAnalytics: true,
+  webSearch: true,
   social: true,
+  x: true,
   memory: true,
   automations: true,
   email: true,

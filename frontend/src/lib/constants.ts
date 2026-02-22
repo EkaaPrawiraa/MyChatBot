@@ -47,6 +47,15 @@ export const API_ENDPOINTS = {
   TELEGRAM_DISCONNECT: "/api/v1/integrations/telegram/disconnect",
   DISCORD_UPSERT: "/api/v1/integrations/discord",
   DISCORD_DISCONNECT: "/api/v1/integrations/discord/disconnect",
+  X_CONNECT: "/api/v1/integrations/x/connect",
+  X_UPSERT: "/api/v1/integrations/x",
+  X_DISCONNECT: "/api/v1/integrations/x/disconnect",
+
+  // X
+  X_ME: "/api/v1/x/me",
+  X_MY_TWEETS: "/api/v1/x/my-tweets",
+  X_TWEET_CREATE: "/api/v1/x/tweet",
+  X_SEARCH: "/api/v1/x/search",
 
   // WhatsApp
   WHATSAPP_SEND: "/api/v1/whatsapp/send",
@@ -80,6 +89,10 @@ export const API_ENDPOINTS = {
   DRIVE_CREATE_SHEET: "/api/v1/drive/create-sheet",
   DOCUMENTS_SUMMARIZE: "/api/v1/documents/summarize",
   YOUTUBE_ANALYTICS: "/api/v1/youtube/analytics",
+
+  // Web
+  WEB_SEARCH: "/api/v1/web/search",
+  WEB_FETCH: "/api/v1/web/fetch",
 };
 
 export const API_HEADERS = {

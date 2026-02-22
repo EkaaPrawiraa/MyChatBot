@@ -60,13 +60,15 @@ func main() {
 	chatUC := usecase.NewChatUsecase(cfg.AI.OrchestratorURL, cfg.App.APIKey)
 	memoryUC := usecase.NewMemoryUsecase(shortMemRepo, longMemRepo, ownerProfileRepo)
 	activityUC := usecase.NewActivityUsecase(activityRepo)
-	reminderUC := usecase.NewReminderUsecase(reminderRepo)
 	automationUC := usecase.NewAutomationUsecase(automationRepo)
 	integrationsUC := usecase.NewIntegrationsUsecase(
 		integrationsRepo,
 		cfg.Google.ClientID,
 		cfg.Google.ClientSecret,
 		cfg.Google.RedirectURL,
+		cfg.X.ClientID,
+		cfg.X.ClientSecret,
+		cfg.X.RedirectURI,
 		cfg.App.DashboardURL,
 	)
 	toolsUC := usecase.NewToolsUsecase(
@@ -74,8 +76,12 @@ func main() {
 		cfg.Google.ClientID,
 		cfg.Google.ClientSecret,
 		cfg.Google.RedirectURL,
+		cfg.X.ClientID,
+		cfg.X.ClientSecret,
+		cfg.X.RedirectURI,
 		cfg.WhatsApp.BotURL,
 	)
+	reminderUC := usecase.NewReminderUsecase(reminderRepo, toolsUC)
 	approvalUC := usecase.NewApprovalUsecase(approvalRepo, toolsUC, activityUC)
 
 	// ---- Handlers ----

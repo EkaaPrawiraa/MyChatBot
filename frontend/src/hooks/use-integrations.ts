@@ -4,6 +4,7 @@ import {
   type WhatsAppUpsertPayload,
   type TelegramUpsertPayload,
   type DiscordUpsertPayload,
+  type XUpsertPayload,
 } from "@/src/services/integrations-service";
 import { QUERY_KEYS } from "@/lib/constants";
 
@@ -82,6 +83,27 @@ export function useDisconnectDiscord() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => integrationsService.disconnectDiscord(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useUpsertX() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: XUpsertPayload) =>
+      integrationsService.upsertX(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
+    },
+  });
+}
+
+export function useDisconnectX() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => integrationsService.disconnectX(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.INTEGRATIONS_STATUS });
     },

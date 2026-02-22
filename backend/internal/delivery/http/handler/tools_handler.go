@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/EkaaPrawiraa/axis-assistant/internal/domain"
@@ -270,6 +271,28 @@ func (h *ToolsHandler) YouTubeAnalytics(c *gin.Context) {
 	response.OK(c, data)
 }
 
+func (h *ToolsHandler) WebSearch(c *gin.Context) {
+	query := c.Query("q")
+	maxResults := parseIntQuery(c, "maxResults", 5)
+	data, err := h.uc.WebSearch(c.Request.Context(), query, maxResults)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+func (h *ToolsHandler) WebFetch(c *gin.Context) {
+	pageURL := c.Query("url")
+	maxBytes := parseIntQuery(c, "maxBytes", 20000)
+	data, err := h.uc.WebFetch(c.Request.Context(), pageURL, maxBytes)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
 type whatsappSendRequest struct {
 	To      string `json:"to"`
 	Message string `json:"message"`
@@ -364,6 +387,61 @@ func (h *ToolsHandler) DiscordWebhookSend(c *gin.Context) {
 		return
 	}
 	data, err := h.uc.DiscordWebhookSend(c.Request.Context(), req.Content, req.Username)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+func (h *ToolsHandler) XMe(c *gin.Context) {
+	data, err := h.uc.XMe(c.Request.Context())
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+func (h *ToolsHandler) XMyTweets(c *gin.Context) {
+	limit := parseIntQuery(c, "limit", 10)
+	data, err := h.uc.XMyTweets(c.Request.Context(), limit)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+func (h *ToolsHandler) XSearch(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		query = strings.TrimSpace(c.Query("query"))
+	}
+	maxResults := parseIntQuery(c, "maxResults", 10)
+	if maxResults == 10 {
+		// Also accept snake_case.
+		maxResults = parseIntQuery(c, "max_results", 10)
+	}
+	data, err := h.uc.XSearch(c.Request.Context(), query, maxResults)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+type xTweetRequest struct {
+	Text string `json:"text"`
+}
+
+func (h *ToolsHandler) XTweet(c *gin.Context) {
+	var req xTweetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	data, err := h.uc.XTweet(c.Request.Context(), req.Text)
 	if err != nil {
 		response.Err(c, err)
 		return

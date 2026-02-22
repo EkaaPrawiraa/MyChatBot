@@ -13,6 +13,7 @@ type Config struct {
 	DB     DBConfig
 	AI     AIConfig
 	Google GoogleConfig
+	X      XConfig
 	WhatsApp WhatsAppConfig
 }
 
@@ -50,6 +51,12 @@ type GoogleConfig struct {
 	RedirectURL  string
 }
 
+type XConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
+}
+
 type WhatsAppConfig struct {
 	VerifyToken string
 	BotURL      string
@@ -82,6 +89,11 @@ func Load() (*Config, error) {
 			ClientID:     env("GOOGLE_CLIENT_ID", ""),
 			ClientSecret: env("GOOGLE_CLIENT_SECRET", ""),
 			RedirectURL:  env("GOOGLE_REDIRECT_URL", ""),
+		},
+		X: XConfig{
+			ClientID:     env("X_CLIENT_ID", ""),
+			ClientSecret: env("X_CLIENT_SECRET", ""),
+			RedirectURI:  env("X_REDIRECT_URI", ""),
 		},
 		WhatsApp: WhatsAppConfig{
 			VerifyToken: env("WHATSAPP_VERIFY_TOKEN", ""),

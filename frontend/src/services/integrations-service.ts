@@ -21,6 +21,14 @@ export interface IntegrationsStatus {
     webhookMasked?: string;
     botTokenMasked?: string;
   };
+
+  x?: {
+    configured: boolean;
+    apiKeyMasked?: string;
+    accessTokenMasked?: string;
+    bearerTokenMasked?: string;
+    oauth2AccessTokenMasked?: string;
+  };
 }
 
 export interface WhatsAppUpsertPayload {
@@ -36,6 +44,14 @@ export interface TelegramUpsertPayload {
 export interface DiscordUpsertPayload {
   webhook_url?: string;
   bot_token?: string;
+}
+
+export interface XUpsertPayload {
+  api_key?: string;
+  api_secret?: string;
+  access_token?: string;
+  access_token_secret?: string;
+  bearer_token?: string;
 }
 
 export const integrationsService = {
@@ -91,6 +107,16 @@ export const integrationsService = {
   async disconnectDiscord(): Promise<{ disconnected: boolean }> {
     return apiClient.post<{ disconnected: boolean }>(
       API_ENDPOINTS.DISCORD_DISCONNECT,
+    );
+  },
+
+  async upsertX(payload: XUpsertPayload): Promise<IntegrationsStatus> {
+    return apiClient.put<IntegrationsStatus>(API_ENDPOINTS.X_UPSERT, payload);
+  },
+
+  async disconnectX(): Promise<{ disconnected: boolean }> {
+    return apiClient.post<{ disconnected: boolean }>(
+      API_ENDPOINTS.X_DISCONNECT,
     );
   },
 };
