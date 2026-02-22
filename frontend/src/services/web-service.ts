@@ -3,7 +3,12 @@ import { API_ENDPOINTS } from "@/lib/constants";
 
 export type WebSearchResponse = {
   query?: string;
-  results?: Array<{ title?: string; url?: string; snippet?: string }>;
+  results?: Array<{
+    title?: string;
+    url?: string;
+    snippet?: string;
+    content?: string;
+  }>;
   source?: string;
   warnings?: string[];
 };
@@ -31,15 +36,9 @@ export const webService = {
     );
   },
 
-  async fetch(params: {
-    url: string;
-    maxBytes?: number;
-  }): Promise<WebFetchResponse> {
+  async fetch(params: { url: string }): Promise<WebFetchResponse> {
     const qs = new URLSearchParams();
     qs.set("url", params.url);
-    if (params.maxBytes !== undefined) {
-      qs.set("maxBytes", String(params.maxBytes));
-    }
 
     return apiClient.get<WebFetchResponse>(
       `${API_ENDPOINTS.WEB_FETCH}?${qs.toString()}`,

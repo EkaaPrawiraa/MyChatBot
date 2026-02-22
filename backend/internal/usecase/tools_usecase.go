@@ -403,9 +403,9 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 									if !ok {
 										continue
 									}
-									title, _ := m["title"].(string)
-									link, _ := m["url"].(string)
-									snippet, _ := m["content"].(string)
+												title, _ := m["title"].(string)
+												link, _ := m["url"].(string)
+												content, _ := m["content"].(string)
 									link = strings.TrimSpace(link)
 									if !isHTTPURL(link) || seen[link] {
 										continue
@@ -415,11 +415,21 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 									if title == "" {
 										title = link
 									}
-									snippet = strings.TrimSpace(snippet)
-									if len(snippet) > 240 {
-										snippet = strings.TrimSpace(snippet[:240])
-									}
-									results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+
+												content = strings.TrimSpace(content)
+												// Keep a short snippet for the list, but also return the full content field
+												// so the UI can display the article/news text without a separate fetch.
+												snippet := content
+												if len(snippet) > 240 {
+													snippet = strings.TrimSpace(snippet[:240])
+												}
+
+												// Safety cap: Tavily content can be large.
+												if len(content) > 200000 {
+													content = strings.TrimSpace(content[:200000])
+												}
+
+												results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet, "content": content})
 								}
 							}
 
@@ -538,6 +548,7 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 							"title":   title,
 							"url":     href,
 							"snippet": snippet,
+							"content": snippet,
 						})
 					}
 
@@ -619,7 +630,7 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 							if title == "" {
 								title = link
 							}
-							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet, "content": snippet})
 						}
 
 						// "Results" is a flat list.
@@ -746,7 +757,7 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 							if len(snippet) > 240 {
 								snippet = strings.TrimSpace(snippet[:240])
 							}
-							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+							results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet, "content": snippet})
 						}
 
 						out := map[string]any{
@@ -785,10 +796,10 @@ func (u *toolsUsecase) WebFetch(ctx context.Context, pageURL string, maxBytes in
 		return nil, apperror.Validation("url must be http(s)")
 	}
 	if maxBytes <= 0 {
-		maxBytes = 20000
-	}
-	if maxBytes > 200000 {
 		maxBytes = 200000
+	}
+	if maxBytes > 500000 {
+		maxBytes = 500000
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)

@@ -10,7 +10,6 @@ export function useWebSearch() {
 
 export function useWebFetch() {
   return useMutation({
-    mutationFn: (params: { url: string; maxBytes?: number }) =>
-      webService.fetch(params),
+    mutationFn: (params: { url: string }) => webService.fetch(params),
   });
 }

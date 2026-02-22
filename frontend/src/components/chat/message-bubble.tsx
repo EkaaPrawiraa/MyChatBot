@@ -190,31 +190,41 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4 animate-slide-in`}
+      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-2.5 md:mb-4 animate-slide-in`}
     >
       <div
-        className={`group relative max-w-2xl px-4 py-3 rounded-lg ${
-          isUser ? "message-user" : "message-assistant"
-        } min-w-0 break-words`}
+        className={
+          isUser
+            ? "group relative max-w-[70%] sm:max-w-[76%] md:max-w-2xl px-2 py-1.5 md:px-4 md:py-3 rounded-lg message-user min-w-0 break-words"
+            : "group relative w-full max-w-full min-w-0"
+        }
       >
         {/* Content */}
-        <div className={`${isUser ? "text-white" : "text-foreground"}`}>
+        <div className={isUser ? "text-white" : "text-foreground"}>
           {isUser ? (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+            <p className="text-[12.5px] sm:text-[13px] md:text-sm leading-relaxed whitespace-pre-wrap break-words">
               {message.content}
             </p>
           ) : (
             <div className="flex items-start gap-2 min-w-0">
-              <div className="prose prose-sm dark:prose-invert max-w-none flex-1 min-w-0 break-words">
+              <div className="prose prose-sm dark:prose-invert max-w-none flex-1 min-w-0 break-words text-[13px] md:text-sm">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
+                    pre: ({ children, ...props }: any) => (
+                      <pre
+                        className="my-2 overflow-x-auto max-w-full bg-transparent p-0"
+                        {...props}
+                      >
+                        {children}
+                      </pre>
+                    ),
                     code: ({ inline, className, children, ...props }: any) => (
                       <code
                         className={`${
                           inline
-                            ? "bg-muted rounded px-1.5 py-0.5 text-xs"
-                            : "block bg-muted rounded p-3 overflow-x-auto my-2 border border-border"
+                            ? "bg-muted rounded px-1 py-0.5 text-[11px] md:text-xs"
+                            : "block bg-muted rounded-md p-1.5 md:p-3 overflow-x-auto border border-border text-[12px] md:text-sm leading-snug max-w-full"
                         } font-mono`}
                         {...props}
                       >
@@ -222,20 +232,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                       </code>
                     ),
                     p: ({ children }: any) => (
-                      <p className="text-sm leading-relaxed mb-2">{children}</p>
+                      <p className="text-[13px] md:text-sm leading-relaxed mb-1 md:mb-2">
+                        {children}
+                      </p>
                     ),
                     ul: ({ children }: any) => (
-                      <ul className="list-disc list-inside mb-2 space-y-1">
+                      <ul className="list-disc list-inside mb-1.5 md:mb-2 space-y-1">
                         {children}
                       </ul>
                     ),
                     ol: ({ children }: any) => (
-                      <ol className="list-decimal list-inside mb-2 space-y-1">
+                      <ol className="list-decimal list-inside mb-1.5 md:mb-2 space-y-1">
                         {children}
                       </ol>
                     ),
                     li: ({ children }: any) => (
-                      <li className="text-sm">{children}</li>
+                      <li className="text-[13px] md:text-sm">{children}</li>
                     ),
                     a: ({ href, children }: any) => (
                       <a
@@ -259,12 +271,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {/* Bottom Bar - Tools, Intent, Latency */}
         {!isUser &&
           (message.toolsUsed || message.intent || message.latency) && (
-            <div className="mt-2 pt-2 border-t border-border flex flex-wrap gap-2 items-center text-xs">
-              {message.intent && (
-                <span className="text-muted-foreground">
-                  Intent: {message.intent}
-                </span>
-              )}
+            <div className="mt-2 flex flex-wrap gap-2 items-center text-[11px] md:text-xs text-muted-foreground">
+              {message.intent && <span>Intent: {message.intent}</span>}
               {message.toolsUsed && message.toolsUsed.length > 0 && (
                 <div className="flex gap-2">
                   {message.toolsUsed.map((tool) => (
@@ -273,9 +281,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 </div>
               )}
               {message.latency && (
-                <span className="text-muted-foreground ml-auto">
-                  {message.latency}ms
-                </span>
+                <span className="ml-auto">{message.latency}ms</span>
               )}
             </div>
           )}
@@ -284,8 +290,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={
             isUser
-              ? "mt-2 flex items-center gap-2 text-xs text-primary-foreground/80"
-              : "mt-2 flex items-center gap-2 text-xs text-muted-foreground"
+              ? "mt-1.5 md:mt-2 flex items-center gap-2 text-[11px] md:text-xs text-primary-foreground/80"
+              : "mt-2 flex items-center gap-2 text-[11px] md:text-xs text-muted-foreground"
           }
         >
           {isUser && message.clientStatus ? (
@@ -309,7 +315,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={`h-7 w-7 ${isUser ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
+                className={`h-6 w-6 md:h-7 md:w-7 ${isUser ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={handleCopy}
                 aria-label={copied ? "Copied" : "Copy message"}
                 title={copied ? "Copied" : "Copy"}
@@ -322,7 +328,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  className="h-6 w-6 md:h-7 md:w-7 text-muted-foreground hover:text-foreground"
                   onClick={handleToggleSpeak}
                   aria-label={isSpeaking ? "Stop audio" : "Play audio"}
                   title={isSpeaking ? "Stop" : "Play"}

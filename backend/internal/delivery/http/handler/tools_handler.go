@@ -284,7 +284,7 @@ func (h *ToolsHandler) WebSearch(c *gin.Context) {
 
 func (h *ToolsHandler) WebFetch(c *gin.Context) {
 	pageURL := c.Query("url")
-	maxBytes := parseIntQuery(c, "maxBytes", 20000)
+	maxBytes := parseIntQuery(c, "maxBytes", 200000)
 	data, err := h.uc.WebFetch(c.Request.Context(), pageURL, maxBytes)
 	if err != nil {
 		response.Err(c, err)

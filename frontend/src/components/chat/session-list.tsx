@@ -21,6 +21,7 @@ interface SessionListProps {
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  headerAction?: React.ReactNode;
 }
 
 export function SessionList({
@@ -29,6 +30,7 @@ export function SessionList({
   onCreateSession,
   onCloseSession,
   onDeleteSession,
+  headerAction,
 }: SessionListProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -36,14 +38,17 @@ export function SessionList({
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-foreground">Sessions</h2>
-          <Button
-            size="sm"
-            onClick={onCreateSession}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus size={16} className="mr-1" />
-            New
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={onCreateSession}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus size={16} className="mr-1" />
+              New
+            </Button>
+            {headerAction}
+          </div>
         </div>
       </div>
 

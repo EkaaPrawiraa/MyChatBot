@@ -28,6 +28,7 @@ export default function ChatPageClient() {
   const sessionId = searchParams.get("session");
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [showSessionsSidebar, setShowSessionsSidebar] = React.useState(true);
+  const [isMobileSessionsOpen, setIsMobileSessionsOpen] = React.useState(false);
   const [isVoiceRecording, setIsVoiceRecording] = React.useState(false);
   const [voiceStatus, setVoiceStatus] = React.useState<
     "idle" | "requesting" | "recording" | "transcribing" | "error"
@@ -158,6 +159,11 @@ export default function ChatPageClient() {
   }, [sessionId]);
 
   React.useEffect(() => {
+    // When selecting a session on mobile, close the sessions overlay.
+    setIsMobileSessionsOpen(false);
+  }, [sessionId]);
+
+  React.useEffect(() => {
     if (!sessionId) return;
     if (sessionMessages) {
       setMessages(sessionMessages);
@@ -169,7 +175,8 @@ export default function ChatPageClient() {
       return;
     }
 
-    if (isHistoryLoading || isHistoryFetching) {
+    // Allow typing/sending during background refetches; only block on initial load.
+    if (isHistoryLoading) {
       return;
     }
 
@@ -233,7 +240,7 @@ export default function ChatPageClient() {
 
   const handleVoiceRecord = async () => {
     if (!sessionId) return;
-    if (isHistoryLoading || isHistoryFetching) return;
+    if (isHistoryLoading) return;
     if (isTranscribing) return;
 
     // Toggle behavior: if currently recording, stop.
@@ -375,6 +382,42 @@ export default function ChatPageClient() {
     <div className="flex h-[100dvh] overflow-hidden">
       <AppSidebar />
 
+      {isMobileSessionsOpen ? (
+        <div
+          className="fixed inset-0 z-50 md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Sessions"
+        >
+          <div
+            className="absolute inset-0 bg-background/80"
+            onClick={() => setIsMobileSessionsOpen(false)}
+          />
+          <div className="relative flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
+            <div className="flex-1 min-h-0">
+              <SessionList
+                sessions={sessions}
+                activeSessionId={sessionId || undefined}
+                onCreateSession={handleCreateSession}
+                onCloseSession={handleCloseSession}
+                onDeleteSession={handleDeleteSession}
+                headerAction={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsMobileSessionsOpen(false)}
+                    aria-label="Close sessions"
+                  >
+                    <PanelLeftClose size={18} />
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex flex-1 overflow-hidden min-h-0">
           {showSessionsSidebar && (
@@ -390,32 +433,44 @@ export default function ChatPageClient() {
           )}
 
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-            <div className="bg-background border-b border-border px-6 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <SidebarHeaderToggle />
-                  <h1 className="text-xl font-semibold">Chat</h1>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ThemeToggle />
-                  <div className="hidden md:flex">
+            <div className="bg-background border-b border-border px-4 py-3 md:px-6 md:py-4">
+              <div className="mx-auto w-full max-w-3xl">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <SidebarHeaderToggle />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => setShowSessionsSidebar((v) => !v)}
-                      aria-label={
-                        showSessionsSidebar
-                          ? "Hide sessions sidebar"
-                          : "Show sessions sidebar"
-                      }
+                      className="md:hidden"
+                      onClick={() => setIsMobileSessionsOpen(true)}
+                      aria-label="Open sessions"
                     >
-                      {showSessionsSidebar ? (
-                        <PanelLeftClose size={18} />
-                      ) : (
-                        <PanelLeftOpen size={18} />
-                      )}
+                      <PanelLeftOpen size={18} />
                     </Button>
+                    <h1 className="text-lg font-semibold md:text-xl">Chat</h1>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ThemeToggle />
+                    <div className="hidden md:flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowSessionsSidebar((v) => !v)}
+                        aria-label={
+                          showSessionsSidebar
+                            ? "Hide sessions sidebar"
+                            : "Show sessions sidebar"
+                        }
+                      >
+                        {showSessionsSidebar ? (
+                          <PanelLeftClose size={18} />
+                        ) : (
+                          <PanelLeftOpen size={18} />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -430,18 +485,24 @@ export default function ChatPageClient() {
                     </p>
                   </div>
                 ) : (
-                  <MessageList messages={messages} isLoading={isSending} />
+                  <div className="flex-1 min-h-0">
+                    <div className="mx-auto w-full max-w-3xl h-full flex flex-col min-h-0">
+                      <MessageList messages={messages} isLoading={isSending} />
+                    </div>
+                  </div>
                 )}
-                <ChatInput
-                  onSendMessage={handleSendMessage}
-                  onVoiceRecord={handleVoiceRecord}
-                  isVoiceRecording={isVoiceRecording}
-                  voiceStatus={isTranscribing ? "transcribing" : voiceStatus}
-                  voiceStatusDetail={voiceStatusDetail}
-                  voiceLevel={voiceLevel}
-                  isLoading={isSending || isTranscribing}
-                  disabled={!sessionId || isHistoryLoading || isHistoryFetching}
-                />
+                <div className="mx-auto w-full max-w-3xl">
+                  <ChatInput
+                    onSendMessage={handleSendMessage}
+                    onVoiceRecord={handleVoiceRecord}
+                    isVoiceRecording={isVoiceRecording}
+                    voiceStatus={isTranscribing ? "transcribing" : voiceStatus}
+                    voiceStatusDetail={voiceStatusDetail}
+                    voiceLevel={voiceLevel}
+                    isLoading={isSending || isTranscribing}
+                    disabled={!sessionId || isHistoryLoading}
+                  />
+                </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">
@@ -457,8 +518,6 @@ export default function ChatPageClient() {
             )}
           </div>
         </div>
-
-        <Footer className="flex-shrink-0" />
       </div>
     </div>
   );

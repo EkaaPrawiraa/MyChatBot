@@ -21,7 +21,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useWebFetch, useWebSearch } from "@/src/hooks/use-web";
+import { useWebSearch } from "@/src/hooks/use-web";
 import { useDocumentsSummarize } from "@/src/hooks/use-documents";
 import { useDriveCreateGoogleDoc } from "@/src/hooks/use-drive";
 import type {
@@ -140,7 +140,6 @@ function StepsHeader(props: { step: number; title: string; hint?: string }) {
 
 export default function WebSearchPage() {
   const { mutate: webSearch, isPending: isSearching } = useWebSearch();
-  const { mutate: webFetch, isPending: isFetching } = useWebFetch();
   const { mutate: summarize, isPending: isSummarizing } =
     useDocumentsSummarize();
   const { mutate: createGoogleDoc, isPending: isSavingDoc } =
@@ -156,8 +155,6 @@ export default function WebSearchPage() {
 
   const [selectedUrl, setSelectedUrl] = React.useState<string>("");
   const [selectedTitle, setSelectedTitle] = React.useState<string>("");
-
-  const [maxBytes, setMaxBytes] = React.useState("20000");
   const [fetchRaw, setFetchRaw] = React.useState<WebFetchResponse | null>(null);
 
   const [maxWords, setMaxWords] = React.useState("200");
@@ -356,75 +353,53 @@ export default function WebSearchPage() {
                     <CardTitle>Fetch</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs">Selected URL</Label>
-                        <Input value={selectedUrl} readOnly />
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Select a result on the left first.
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Max bytes</Label>
-                        <Input
-                          value={maxBytes}
-                          onChange={(e) => setMaxBytes(e.target.value)}
-                          placeholder="20000"
-                        />
+                    <div>
+                      <Label className="text-xs">Selected URL</Label>
+                      <Input value={selectedUrl} readOnly />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Select a result on the left first.
                       </div>
                     </div>
 
                     <Button
                       variant="secondary"
-                      disabled={isFetching || !canFetch}
+                      disabled={!canFetch}
                       onClick={() => {
-                        const parsedMaxBytes = Number(maxBytes);
                         setFetchRaw(null);
                         setSummary("");
 
-                        webFetch(
-                          {
-                            url: selectedUrl,
-                            maxBytes: Number.isFinite(parsedMaxBytes)
-                              ? parsedMaxBytes
-                              : 20000,
-                          },
-                          {
-                            onSuccess: (val) => {
-                              setFetchRaw(val);
-                              toast.success("Fetched page");
-                            },
-                            onError: (err) => {
-                              toast.error(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Fetch failed",
-                              );
-                            },
-                          },
+                        const picked = results.find(
+                          (r) => (r.url || "").trim() === selectedUrl,
                         );
+                        const content =
+                          (picked?.content || "").trim() ||
+                          (picked?.snippet || "").trim();
+
+                        setFetchRaw({
+                          url: selectedUrl,
+                          contentType: "text/plain",
+                          text: content,
+                          truncated: false,
+                        });
+
+                        if (content) {
+                          toast.success("Loaded article content");
+                        } else {
+                          toast.error("No content available for this result");
+                        }
                       }}
                     >
-                      {isFetching ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Fetch"
-                      )}
+                      Fetch
                     </Button>
 
                     <div>
-                      <Label className="text-xs">Fetched text</Label>
+                      <Label className="text-xs">Article content</Label>
                       <Textarea
                         value={fetchRaw?.text || ""}
                         readOnly
                         placeholder="Fetch a result to see page text here"
                         className="h-56 resize-none overflow-y-auto"
                       />
-                      {fetchRaw?.truncated ? (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Note: truncated to max bytes.
-                        </div>
-                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
