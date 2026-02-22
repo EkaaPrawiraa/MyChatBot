@@ -46,6 +46,13 @@ if [ ! -f .env ]; then
     fi
 fi
 
+# Load env vars (best-effort). This helps dependencies that read from process env.
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
 UVICORN="$VENV/uvicorn"
 if [ ! -f "$UVICORN" ]; then
     red "✗ uvicorn not found in venv."

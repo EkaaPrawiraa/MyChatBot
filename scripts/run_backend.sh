@@ -35,6 +35,11 @@ if [ ! -f .env ]; then
     fi
 fi
 
+# Load env vars so Go can read them even if dotenv loading is disabled.
+set -a
+. ./.env
+set +a
+
 echo "Running: go run ./cmd/api/"
 echo ""
 

@@ -28,6 +28,7 @@ type configPayload struct {
 	APIKey            string `json:"API_KEY"`
 	OpenAIAPIKey      string `json:"OPENAI_API_KEY"`
 	OpenAIModel       string `json:"OPENAI_MODEL"`
+	TavilyAPIKey      string `json:"TAVILY_API_KEY"`
 	GoogleClientID    string `json:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `json:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL string `json:"GOOGLE_REDIRECT_URL"`
@@ -263,6 +264,9 @@ func writeDotEnv(projectDir string, cfg configPayload) error {
 	if strings.TrimSpace(cfg.OpenAIModel) != "" {
 		lines = append(lines, "OPENAI_MODEL="+shellEscape(cfg.OpenAIModel))
 	}
+	if strings.TrimSpace(cfg.TavilyAPIKey) != "" {
+		lines = append(lines, "TAVILY_API_KEY="+shellEscape(cfg.TavilyAPIKey))
+	}
 	if strings.TrimSpace(cfg.GoogleClientID) != "" {
 		lines = append(lines, "GOOGLE_CLIENT_ID="+shellEscape(cfg.GoogleClientID))
 	}
@@ -383,6 +387,10 @@ const indexHTML = `<!doctype html>
           <label>OPENAI_MODEL</label>
           <input id="OPENAI_MODEL" placeholder="gpt-4o-mini" />
         </div>
+		<div>
+		  <label>TAVILY_API_KEY (optional, enables web search)</label>
+		  <input id="TAVILY_API_KEY" placeholder="tvly-..." />
+		</div>
         <div>
           <label>WHATSAPP_DEFAULT_COUNTRY_CODE</label>
           <input id="WHATSAPP_DEFAULT_COUNTRY_CODE" placeholder="62" />
@@ -475,7 +483,7 @@ const indexHTML = `<!doctype html>
   }
 
   document.getElementById('saveBtn').addEventListener('click', async () => {
-    const ids = ['API_KEY','OPENAI_API_KEY','OPENAI_MODEL','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URL','X_CLIENT_ID','X_CLIENT_SECRET','X_REDIRECT_URI','WHATSAPP_DEFAULT_COUNTRY_CODE'];
+		const ids = ['API_KEY','OPENAI_API_KEY','OPENAI_MODEL','TAVILY_API_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URL','X_CLIENT_ID','X_CLIENT_SECRET','X_REDIRECT_URI','WHATSAPP_DEFAULT_COUNTRY_CODE'];
     const body = {};
     for (const id of ids) body[id] = document.getElementById(id).value;
     await post('/api/config', body);

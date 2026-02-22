@@ -202,7 +202,7 @@ cp agent/.env.example agent/.env
 
 Then edit the files:
 
-- `agent/.env`: set `OPENAI_API_KEY`
+- `agent/.env`: set `OPENAI_API_KEY` (and optionally `TAVILY_API_KEY` to enable `web.search`)
 - `backend/.env`: confirm DB config, `AI_ORCHESTRATOR_URL`, and (optional) `GOOGLE_*` and `WHATSAPP_BOT_URL`
 
 ### 4) Run services
@@ -243,7 +243,7 @@ Important variables:
 - `OPENAI_MODEL`: default `gpt-4o-mini`
 - `BACKEND_URL`: default `http://localhost:8080`
 - `API_KEY`: must match backend `API_KEY`
-- `TAVILY_API_KEY`: optional. If set, the agent uses Tavily for `web.search` before falling back to DuckDuckGo/Wikipedia.
+- `TAVILY_API_KEY`: optional (recommended). Enables Tavily-powered `web.search` (agent-side search is Tavily-only).
 
 ### Frontend env (optional)
 
