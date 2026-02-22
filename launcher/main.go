@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +20,8 @@ type launcherState struct {
 	mu         sync.Mutex
 	lastOutput string
 	runningCmd bool
+	cmdName    string
+	cmdSince   time.Time
 }
 
 var state launcherState
@@ -47,6 +49,8 @@ type statusResponse struct {
 	Ports      map[string]int  `json:"ports"`
 	LastOutput string `json:"lastOutput"`
 	Busy       bool   `json:"busy"`
+	BusyCmd    string `json:"busyCmd"`
+	BusySinceMs int64 `json:"busySinceMs"`
 }
 
 type serviceStatus struct {
@@ -187,7 +191,14 @@ func buildStatus(projectDir string) statusResponse {
 	state.mu.Lock()
 	out := state.lastOutput
 	busy := state.runningCmd
+	busyCmd := state.cmdName
+	busySince := state.cmdSince
 	state.mu.Unlock()
+
+	var busySinceMs int64
+	if busy && !busySince.IsZero() {
+		busySinceMs = time.Since(busySince).Milliseconds()
+	}
 
 	return statusResponse{
 		ProjectDir: projectDir,
@@ -198,6 +209,8 @@ func buildStatus(projectDir string) statusResponse {
 		Ports:      ports,
 		LastOutput: out,
 		Busy:       busy,
+		BusyCmd:    busyCmd,
+		BusySinceMs: busySinceMs,
 	}
 }
 
@@ -234,6 +247,8 @@ func runCompose(projectDir string, composeArgs []string) {
 	}
 	state.runningCmd = true
 	state.lastOutput = ""
+	state.cmdName = "docker compose " + strings.Join(composeArgs, " ")
+	state.cmdSince = time.Now()
 	state.mu.Unlock()
 
 	defer func() {
@@ -244,14 +259,65 @@ func runCompose(projectDir string, composeArgs []string) {
 
 	cmd := exec.Command("docker", append([]string{"compose"}, composeArgs...)...)
 	cmd.Dir = projectDir
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	_ = cmd.Run()
 
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		appendStateOutput("launcher: failed to open stdout pipe: " + err.Error() + "\n")
+		_ = cmd.Run()
+		return
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		appendStateOutput("launcher: failed to open stderr pipe: " + err.Error() + "\n")
+		_ = cmd.Run()
+		return
+	}
+
+	appendStateOutput("$ " + state.cmdName + "\n")
+	if err := cmd.Start(); err != nil {
+		appendStateOutput("launcher: failed to start command: " + err.Error() + "\n")
+		return
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		streamLines(stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		streamLines(stderr)
+	}()
+
+	err = cmd.Wait()
+	wg.Wait()
+	if err != nil {
+		appendStateOutput("\nlauncher: command failed: " + err.Error() + "\n")
+	}
+}
+
+func streamLines(r io.Reader) {
+	s := bufio.NewScanner(r)
+	// Avoid token-too-long for very long docker output lines.
+	buf := make([]byte, 0, 64*1024)
+	s.Buffer(buf, 1024*1024)
+	for s.Scan() {
+		appendStateOutput(s.Text() + "\n")
+	}
+	if err := s.Err(); err != nil {
+		appendStateOutput("launcher: stream error: " + err.Error() + "\n")
+	}
+}
+
+func appendStateOutput(s string) {
+	const max = 120_000
 	state.mu.Lock()
-	state.lastOutput = buf.String()
-	state.mu.Unlock()
+	defer state.mu.Unlock()
+	state.lastOutput += s
+	if len(state.lastOutput) > max {
+		state.lastOutput = state.lastOutput[len(state.lastOutput)-max:]
+	}
 }
 
 func writeDotEnv(projectDir string, cfg configPayload) error {
@@ -295,6 +361,9 @@ func writeDotEnv(projectDir string, cfg configPayload) error {
 func shellEscape(v string) string {
 	// .env format: allow raw, but quote if it has spaces or special chars.
 	s := strings.TrimSpace(v)
+	// Newlines in .env values can corrupt the file and break docker compose parsing.
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
 	if s == "" {
 		return ""
 	}
@@ -457,9 +526,20 @@ const indexHTML = `<!doctype html>
     const compose = s.composeOk ? '<span class="ok">Compose OK</span>' : '<span class="bad">Compose missing</span>';
     const env = s.envOk ? '<span class="ok">.env OK</span>' : '<span class="bad">.env missing</span>';
 
-	document.getElementById('statusLine').innerHTML = 'Project: <b>' + s.projectDir + '</b> — ' + docker + ' · ' + compose + ' · ' + env;
+	let busy = '';
+	if (s.busy) {
+		const secs = Math.floor((s.busySinceMs || 0) / 1000);
+		const cmd = s.busyCmd ? (' — <span class="muted">' + s.busyCmd + '</span>') : '';
+		busy = ' · <span class="muted">Running (' + secs + 's)</span>' + cmd;
+	}
 
-    document.getElementById('output').textContent = s.lastOutput || '(none)';
+	document.getElementById('statusLine').innerHTML = 'Project: <b>' + s.projectDir + '</b> — ' + docker + ' · ' + compose + ' · ' + env + busy;
+
+		if (s.busy && (!s.lastOutput || s.lastOutput.trim() === '')) {
+			document.getElementById('output').textContent = '(running…)';
+		} else {
+			document.getElementById('output').textContent = s.lastOutput || '(none)';
+		}
 
 		const svc = s.services.map(x => {
 			const link = x.url.startsWith('http')
