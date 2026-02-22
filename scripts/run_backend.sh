@@ -35,8 +35,11 @@ if [ ! -f .env ]; then
     fi
 fi
 
-# Load env vars so Go can read them even if dotenv loading is disabled.
+# Load env vars. Source project root .env first (docker compose), then backend/.env.
 set -a
+if [ -f "$ROOT_DIR/.env" ]; then
+    . "$ROOT_DIR/.env"
+fi
 . ./.env
 set +a
 

@@ -42,7 +42,13 @@ import { ThemeToggle } from "@/src/components/layout/theme-toggle";
 import { GoogleGIcon, XLogoIcon } from "@/src/components/icons/brands";
 
 export default function SettingsPage() {
-  const { data: profile, isLoading: isLoadingProfile } = useProfile();
+  const {
+    data: profile,
+    isLoading: isLoadingProfile,
+    isFetching: isFetchingProfile,
+    error: profileError,
+    refetch: refetchProfile,
+  } = useProfile();
   const { data: models = [], isLoading: isLoadingModels } = useModels();
   const { mutate: updateProfile, isPending: isUpdating } = useUpdateProfile();
 
@@ -67,6 +73,7 @@ export default function SettingsPage() {
   const {
     data: waStatus,
     isLoading: isLoadingWhatsApp,
+    error: waError,
     refetch: refetchWhatsApp,
   } = useWhatsAppWebStatus(true);
   const { mutate: waLogout, isPending: isLoggingOutWhatsApp } =
@@ -106,6 +113,10 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = React.useState<string>("");
 
   const [waQrNonce, setWaQrNonce] = React.useState(0);
+
+  const waQrAvailable = Boolean(
+    (waStatus as any)?.qrAvailable ?? (waStatus as any)?.qr_available,
+  );
 
   const [telegramBotToken, setTelegramBotToken] = React.useState("");
   const [discordWebhookUrl, setDiscordWebhookUrl] = React.useState("");
@@ -289,14 +300,6 @@ export default function SettingsPage() {
 
   const sidebarItems = SIDEBAR_MENU_ITEMS;
 
-  if (isLoadingProfile) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -323,6 +326,59 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           <div className="space-y-6 max-w-2xl mx-auto w-full">
+            {(isLoadingProfile || profileError) && (
+              <Card className="glass-dark">
+                <CardHeader>
+                  <CardTitle>Backend Connection</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {isLoadingProfile ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        Loading your profile… (first run can take a moment)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Settings can’t load because the backend isn’t
+                        responding.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {profileError instanceof Error
+                          ? profileError.message
+                          : "Unknown error"}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => refetchProfile()}
+                          disabled={isFetchingProfile}
+                        >
+                          {isFetchingProfile ? "Retrying…" : "Retry"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              "http://localhost:8080/health",
+                              "_blank",
+                            )
+                          }
+                        >
+                          Open Backend Health
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        If you started via Launcher, check its Last Output
+                        panel.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Profile Settings */}
             <Card className="glass-dark">
               <CardHeader>
@@ -466,7 +522,7 @@ export default function SettingsPage() {
 
                 <Button
                   onClick={handleSaveProfile}
-                  disabled={isUpdating}
+                  disabled={isUpdating || isLoadingProfile || !profile}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {isUpdating ? "Saving..." : "Save Profile"}
@@ -893,6 +949,40 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground">
                       Loading WhatsApp status…
                     </p>
+                  ) : waError ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        WhatsApp bot is not reachable.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {waError instanceof Error
+                          ? waError.message
+                          : "Unknown error"}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => refetchWhatsApp()}
+                        >
+                          Retry
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              "http://localhost:3100/status",
+                              "_blank",
+                            )
+                          }
+                        >
+                          Open Bot Status
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        In Docker/Launcher mode, ensure the `whatsapp_bot`
+                        service is running.
+                      </p>
+                    </div>
                   ) : waStatus?.connected ? (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">
@@ -922,11 +1012,17 @@ export default function SettingsPage() {
                       </p>
 
                       <div className="inline-flex rounded-md border border-border bg-muted p-3">
-                        <img
-                          src={`${API_ENDPOINTS.WHATSAPP_QR_PNG}?v=${waQrNonce}`}
-                          alt="WhatsApp QR"
-                          className="h-48 w-48"
-                        />
+                        {waQrAvailable ? (
+                          <img
+                            src={`${API_ENDPOINTS.WHATSAPP_QR_PNG}?v=${waQrNonce}`}
+                            alt="WhatsApp QR"
+                            className="h-48 w-48"
+                          />
+                        ) : (
+                          <div className="h-48 w-48 flex items-center justify-center text-xs text-muted-foreground">
+                            Waiting for QR…
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">

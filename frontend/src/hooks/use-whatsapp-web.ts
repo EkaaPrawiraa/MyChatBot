@@ -9,7 +9,9 @@ export function useWhatsAppWebStatus(enabled: boolean = true) {
     queryFn: () => whatsappWebService.getStatus(),
     enabled,
     staleTime: 1000,
-    refetchInterval: 2000,
+    retry: 0,
+    // If the bot is down (502), avoid hammering the backend every 2s.
+    refetchInterval: (query) => (query.state.error ? false : 2000),
   });
 }
 

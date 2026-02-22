@@ -31,6 +31,7 @@ type configPayload struct {
 	OpenAIAPIKey      string `json:"OPENAI_API_KEY"`
 	OpenAIModel       string `json:"OPENAI_MODEL"`
 	TavilyAPIKey      string `json:"TAVILY_API_KEY"`
+	DashboardURL      string `json:"DASHBOARD_URL"`
 	GoogleClientID    string `json:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `json:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL string `json:"GOOGLE_REDIRECT_URL"`
@@ -38,6 +39,11 @@ type configPayload struct {
 	XClientSecret     string `json:"X_CLIENT_SECRET"`
 	XRedirectURI      string `json:"X_REDIRECT_URI"`
 	WhatsAppDefaultCountryCode string `json:"WHATSAPP_DEFAULT_COUNTRY_CODE"`
+	WhatsAppVerifyToken string `json:"WHATSAPP_VERIFY_TOKEN"`
+	WhatsAppAPIToken    string `json:"WHATSAPP_API_TOKEN"`
+	NextPublicBackendURL string `json:"NEXT_PUBLIC_BACKEND_URL"`
+	NextPublicAPIURL     string `json:"NEXT_PUBLIC_API_URL"`
+	NextPublicAPIKey     string `json:"NEXT_PUBLIC_API_KEY"`
 }
 
 type statusResponse struct {
@@ -183,7 +189,7 @@ func buildStatus(projectDir string) statusResponse {
 		{Name: "Frontend", URL: "http://localhost:3000", Health: probeHTTP("http://localhost:3000")},
 		{Name: "Backend", URL: "http://localhost:8080/health", Health: probeHTTP("http://localhost:8080/health")},
 		{Name: "Agent", URL: "http://localhost:8000/health", Health: probeHTTP("http://localhost:8000/health")},
-		{Name: "WhatsApp Bot", URL: "http://localhost:3100", Health: probeHTTP("http://localhost:3100")},
+		{Name: "WhatsApp Bot", URL: "http://localhost:3100/status", Health: probeHTTP("http://localhost:3100/status")},
 		{Name: "Postgres", URL: "localhost:5432", Health: "unknown"},
 		{Name: "Redis", URL: "localhost:6379", Health: "unknown"},
 	}
@@ -333,6 +339,9 @@ func writeDotEnv(projectDir string, cfg configPayload) error {
 	if strings.TrimSpace(cfg.TavilyAPIKey) != "" {
 		lines = append(lines, "TAVILY_API_KEY="+shellEscape(cfg.TavilyAPIKey))
 	}
+	if strings.TrimSpace(cfg.DashboardURL) != "" {
+		lines = append(lines, "DASHBOARD_URL="+shellEscape(cfg.DashboardURL))
+	}
 	if strings.TrimSpace(cfg.GoogleClientID) != "" {
 		lines = append(lines, "GOOGLE_CLIENT_ID="+shellEscape(cfg.GoogleClientID))
 	}
@@ -353,6 +362,21 @@ func writeDotEnv(projectDir string, cfg configPayload) error {
 	}
 	if strings.TrimSpace(cfg.WhatsAppDefaultCountryCode) != "" {
 		lines = append(lines, "WHATSAPP_DEFAULT_COUNTRY_CODE="+shellEscape(cfg.WhatsAppDefaultCountryCode))
+	}
+	if strings.TrimSpace(cfg.WhatsAppVerifyToken) != "" {
+		lines = append(lines, "WHATSAPP_VERIFY_TOKEN="+shellEscape(cfg.WhatsAppVerifyToken))
+	}
+	if strings.TrimSpace(cfg.WhatsAppAPIToken) != "" {
+		lines = append(lines, "WHATSAPP_API_TOKEN="+shellEscape(cfg.WhatsAppAPIToken))
+	}
+	if strings.TrimSpace(cfg.NextPublicBackendURL) != "" {
+		lines = append(lines, "NEXT_PUBLIC_BACKEND_URL="+shellEscape(cfg.NextPublicBackendURL))
+	}
+	if strings.TrimSpace(cfg.NextPublicAPIURL) != "" {
+		lines = append(lines, "NEXT_PUBLIC_API_URL="+shellEscape(cfg.NextPublicAPIURL))
+	}
+	if strings.TrimSpace(cfg.NextPublicAPIKey) != "" {
+		lines = append(lines, "NEXT_PUBLIC_API_KEY="+shellEscape(cfg.NextPublicAPIKey))
 	}
 	lines = append(lines, "")
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0600)
@@ -460,10 +484,22 @@ const indexHTML = `<!doctype html>
 		  <label>TAVILY_API_KEY (optional, enables web search)</label>
 		  <input id="TAVILY_API_KEY" placeholder="tvly-..." />
 		</div>
+		<div>
+		  <label>DASHBOARD_URL (optional redirect after OAuth)</label>
+		  <input id="DASHBOARD_URL" placeholder="http://localhost:3000" />
+		</div>
         <div>
           <label>WHATSAPP_DEFAULT_COUNTRY_CODE</label>
           <input id="WHATSAPP_DEFAULT_COUNTRY_CODE" placeholder="62" />
         </div>
+		<div>
+		  <label>WHATSAPP_VERIFY_TOKEN (optional)</label>
+		  <input id="WHATSAPP_VERIFY_TOKEN" placeholder="" />
+		</div>
+		<div>
+		  <label>WHATSAPP_API_TOKEN (optional)</label>
+		  <input id="WHATSAPP_API_TOKEN" placeholder="" />
+		</div>
         <div>
           <label>GOOGLE_CLIENT_ID</label>
           <input id="GOOGLE_CLIENT_ID" placeholder="" />
@@ -488,6 +524,18 @@ const indexHTML = `<!doctype html>
           <label>X_REDIRECT_URI</label>
           <input id="X_REDIRECT_URI" placeholder="https://.../api/v1/integrations/x/callback" />
         </div>
+		<div>
+		  <label>NEXT_PUBLIC_BACKEND_URL (optional)</label>
+		  <input id="NEXT_PUBLIC_BACKEND_URL" placeholder="" />
+		</div>
+		<div>
+		  <label>NEXT_PUBLIC_API_URL (optional)</label>
+		  <input id="NEXT_PUBLIC_API_URL" placeholder="" />
+		</div>
+		<div>
+		  <label>NEXT_PUBLIC_API_KEY (optional)</label>
+		  <input id="NEXT_PUBLIC_API_KEY" placeholder="" />
+		</div>
       </div>
       <div style="height: 12px"></div>
       <button id="saveBtn">Save Config</button>
@@ -563,7 +611,7 @@ const indexHTML = `<!doctype html>
   }
 
   document.getElementById('saveBtn').addEventListener('click', async () => {
-		const ids = ['API_KEY','OPENAI_API_KEY','OPENAI_MODEL','TAVILY_API_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URL','X_CLIENT_ID','X_CLIENT_SECRET','X_REDIRECT_URI','WHATSAPP_DEFAULT_COUNTRY_CODE'];
+		const ids = ['API_KEY','OPENAI_API_KEY','OPENAI_MODEL','TAVILY_API_KEY','DASHBOARD_URL','WHATSAPP_DEFAULT_COUNTRY_CODE','WHATSAPP_VERIFY_TOKEN','WHATSAPP_API_TOKEN','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URL','X_CLIENT_ID','X_CLIENT_SECRET','X_REDIRECT_URI','NEXT_PUBLIC_BACKEND_URL','NEXT_PUBLIC_API_URL','NEXT_PUBLIC_API_KEY'];
     const body = {};
     for (const id of ids) body[id] = document.getElementById(id).value;
     await post('/api/config', body);

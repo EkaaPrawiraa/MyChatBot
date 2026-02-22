@@ -73,6 +73,7 @@ export const profileService = {
   async getProfile(): Promise<UserProfile> {
     const backend = await apiClient.get<BackendProfileResponse>(
       API_ENDPOINTS.PROFILE,
+      { timeoutMs: 8000 },
     );
     return mapProfile(backend);
   },

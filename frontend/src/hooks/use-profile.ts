@@ -11,6 +11,7 @@ export function useProfile() {
     queryKey: QUERY_KEYS.PROFILE,
     queryFn: () => profileService.getProfile(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 0,
   });
 }
 
