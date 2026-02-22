@@ -80,6 +80,7 @@ func main() {
 		cfg.X.ClientSecret,
 		cfg.X.RedirectURI,
 		cfg.WhatsApp.BotURL,
+		cfg.Tools.TavilyAPIKey,
 	)
 	reminderUC := usecase.NewReminderUsecase(reminderRepo, toolsUC)
 	approvalUC := usecase.NewApprovalUsecase(approvalRepo, toolsUC, activityUC)

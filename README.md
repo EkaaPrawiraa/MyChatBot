@@ -235,6 +235,7 @@ Important variables:
 - `AI_ORCHESTRATOR_URL`: where the backend calls the agent (default `http://localhost:8000`)
 - `DASHBOARD_URL`: optional redirect target after Google OAuth
 - `WHATSAPP_BOT_URL`: local WhatsApp bot URL (default `http://localhost:3100`)
+- `TAVILY_API_KEY`: optional (recommended). Enables Tavily-powered web search when DuckDuckGo is blocked/unreachable.
 
 ### Agent env (`agent/.env`)
 
@@ -242,6 +243,7 @@ Important variables:
 - `OPENAI_MODEL`: default `gpt-4o-mini`
 - `BACKEND_URL`: default `http://localhost:8080`
 - `API_KEY`: must match backend `API_KEY`
+- `TAVILY_API_KEY`: optional. If set, the agent uses Tavily for `web.search` before falling back to DuckDuckGo/Wikipedia.
 
 ### Frontend env (optional)
 

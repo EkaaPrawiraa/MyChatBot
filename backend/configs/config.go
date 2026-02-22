@@ -12,6 +12,7 @@ type Config struct {
 	App    AppConfig
 	DB     DBConfig
 	AI     AIConfig
+	Tools  ToolsConfig
 	Google GoogleConfig
 	X      XConfig
 	WhatsApp WhatsAppConfig
@@ -43,6 +44,10 @@ func (d DBConfig) DSN() string {
 
 type AIConfig struct {
 	OrchestratorURL string
+}
+
+type ToolsConfig struct {
+	TavilyAPIKey string
 }
 
 type GoogleConfig struct {
@@ -84,6 +89,9 @@ func Load() (*Config, error) {
 		},
 		AI: AIConfig{
 			OrchestratorURL: env("AI_ORCHESTRATOR_URL", "http://localhost:8000"),
+		},
+		Tools: ToolsConfig{
+			TavilyAPIKey: env("TAVILY_API_KEY", ""),
 		},
 		Google: GoogleConfig{
 			ClientID:     env("GOOGLE_CLIENT_ID", ""),

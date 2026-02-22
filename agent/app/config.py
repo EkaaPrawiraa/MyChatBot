@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8080"
     api_key: str = ""
 
+    # Tools
+    tavily_api_key: str = ""
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

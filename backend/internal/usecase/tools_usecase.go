@@ -100,6 +100,7 @@ type toolsUsecase struct {
 	xClientSecret  string
 	xRedirectURI   string
 	whatsAppBotURL string
+	tavilyAPIKey   string
 	httpClient     *http.Client
 }
 
@@ -108,6 +109,7 @@ func NewToolsUsecase(
 	clientID, clientSecret, redirectURL string,
 	xClientID, xClientSecret, xRedirectURI string,
 	whatsAppBotURL string,
+	tavilyAPIKey string,
 ) domain.ToolsUsecase {
 	return &toolsUsecase{
 		integrations:   integrations,
@@ -118,6 +120,7 @@ func NewToolsUsecase(
 		xClientSecret:  xClientSecret,
 		xRedirectURI:   xRedirectURI,
 		whatsAppBotURL: strings.TrimRight(whatsAppBotURL, "/"),
+		tavilyAPIKey:   strings.TrimSpace(tavilyAPIKey),
 		httpClient:     &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -345,6 +348,98 @@ func (u *toolsUsecase) WebSearch(ctx context.Context, query string, maxResults i
 			return
 		}
 		warnings = append(warnings, w)
+	}
+
+	// -------- Provider 0: Tavily Search API (best reliability when configured) --------
+	if strings.TrimSpace(u.tavilyAPIKey) != "" {
+		body := map[string]any{
+			"api_key":            u.tavilyAPIKey,
+			"query":              q,
+			"max_results":        maxResults,
+			"search_depth":       "basic",
+			"include_answer":     false,
+			"include_raw_content": false,
+		}
+
+		bodyBytes, err := json.Marshal(body)
+		if err != nil {
+			addWarning("tavily request marshal failed")
+		} else {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(bodyBytes))
+			if err != nil {
+				addWarning(fmt.Sprintf("tavily request failed: %v", err))
+			} else {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json")
+			req.Header.Set("User-Agent", "axis-assistant/1.0")
+
+				client := &http.Client{Timeout: 10 * time.Second}
+				resp, err := client.Do(req)
+				if err != nil {
+					addWarning(fmt.Sprintf("tavily request failed: %v", err))
+				} else {
+				defer resp.Body.Close()
+				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+					b, _ := io.ReadAll(io.LimitReader(resp.Body, 1200))
+					addWarning(fmt.Sprintf("tavily returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(b))))
+				} else {
+					b, err := io.ReadAll(io.LimitReader(resp.Body, 2_000_000))
+					if err != nil {
+						addWarning("tavily response read failed")
+					} else {
+						var payload map[string]any
+						if err := json.Unmarshal(b, &payload); err != nil {
+							addWarning("tavily json decode failed")
+						} else {
+							seen := map[string]bool{}
+							results := make([]map[string]any, 0, maxResults)
+							raw, _ := payload["results"]
+							if arr, ok := raw.([]any); ok {
+								for _, it := range arr {
+									if len(results) >= maxResults {
+										break
+									}
+									m, ok := it.(map[string]any)
+									if !ok {
+										continue
+									}
+									title, _ := m["title"].(string)
+									link, _ := m["url"].(string)
+									snippet, _ := m["content"].(string)
+									link = strings.TrimSpace(link)
+									if !isHTTPURL(link) || seen[link] {
+										continue
+									}
+									seen[link] = true
+									title = strings.TrimSpace(title)
+									if title == "" {
+										title = link
+									}
+									snippet = strings.TrimSpace(snippet)
+									if len(snippet) > 240 {
+										snippet = strings.TrimSpace(snippet[:240])
+									}
+									results = append(results, map[string]any{"title": title, "url": link, "snippet": snippet})
+								}
+							}
+
+							if len(results) > 0 {
+								out := map[string]any{
+									"query":   q,
+									"results": results,
+									"source":  "tavily",
+								}
+								if len(warnings) > 0 {
+									out["warnings"] = warnings
+								}
+								return out, nil
+							}
+						}
+					}
+				}
+				}
+			}
+		}
 	}
 
 	// -------- Provider 1: DuckDuckGo Lite HTML (best results when it works) --------

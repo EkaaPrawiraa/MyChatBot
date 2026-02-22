@@ -1,22 +1,36 @@
-"""DuckDuckGo-based web search for the agent.
+"""Tavily-based web search for the agent.
 
 This is used by the agent-side `web.search` tool so the LLM can look things up
 without relying on the Go backend's dashboard web-search endpoints.
 
+We intentionally use Tavily only (no DuckDuckGo/Wikipedia fallbacks) to avoid
+network/DNS blocks that frequently affect DuckDuckGo in some environments.
+
 Return shape matches the existing tool contract:
 {
-  "query": str,
-  "results": [{"title": str, "url": str, "snippet": str}],
-  "source": str,
-  "warnings": [str]
+    "query": str,
+    "results": [{"title": str, "url": str, "snippet": str}],
+    "source": str,
+    "warnings": [str]
 }
 """
 
 from __future__ import annotations
 
+import asyncio
+import os
 from typing import Any
 
-import httpx
+from app.config import settings
+
+from pydantic import SecretStr
+
+try:
+    from langchain_tavily import TavilySearch
+    from langchain_tavily._utilities import TavilySearchAPIWrapper
+except Exception:  # noqa: BLE001
+    TavilySearch = None  # type: ignore[assignment]
+    TavilySearchAPIWrapper = None  # type: ignore[assignment]
 
 
 def _is_http_url(raw: str) -> bool:
@@ -24,20 +38,6 @@ def _is_http_url(raw: str) -> bool:
         return False
     v = raw.strip().lower()
     return v.startswith("http://") or v.startswith("https://")
-
-
-def _split_title_snippet(text: str) -> tuple[str, str]:
-    t = (text or "").strip()
-    if not t:
-        return "", ""
-
-    parts = t.split(" - ", 1)
-    if len(parts) == 2:
-        title = parts[0].strip() or t
-        snippet = parts[1].strip()
-        return title, snippet
-
-    return t, ""
 
 
 async def web_search_ddg(query: str, max_results: int = 5) -> dict[str, Any]:
@@ -60,39 +60,54 @@ async def web_search_ddg(query: str, max_results: int = 5) -> dict[str, Any]:
     results: list[dict[str, str]] = []
     seen: set[str] = set()
 
-    async with httpx.AsyncClient(timeout=10.0, headers={
-        "User-Agent": "axis-assistant/1.0",
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-    }) as client:
-        # ---- Provider 1: DuckDuckGo Instant Answer JSON ----
-        try:
-            resp = await client.get(
-                "https://api.duckduckgo.com/",
-                params={
-                    "q": q,
-                    "format": "json",
-                    "no_html": "1",
-                    "no_redirect": "1",
-                },
-            )
-            resp.raise_for_status()
-            payload: dict[str, Any] = resp.json() if resp.content else {}
+    # Read from process env first, then fallback to Settings (which reads agent/.env).
+    tavily_api_key = (os.getenv("TAVILY_API_KEY") or settings.tavily_api_key or "").strip()
 
-            def add_result(text: str, link: str) -> None:
-                nonlocal results
+    if not tavily_api_key:
+        return {
+            "query": q,
+            "results": [],
+            "source": "none",
+            "warnings": ["tavily is not configured (missing TAVILY_API_KEY)"],
+        }
+
+    if TavilySearch is None or TavilySearchAPIWrapper is None:
+        return {
+            "query": q,
+            "results": [],
+            "source": "none",
+            "warnings": [
+                "tavily tool is not available (missing dependency: langchain-tavily)"
+            ],
+        }
+
+    try:
+        api_wrapper = TavilySearchAPIWrapper(tavily_api_key=SecretStr(tavily_api_key))
+        tool = TavilySearch(
+            max_results=max_results,
+            topic="general",
+            api_wrapper=api_wrapper,
+        )
+
+        payload_any = await asyncio.to_thread(tool.invoke, {"query": q})
+        payload: dict[str, Any] = payload_any if isinstance(payload_any, dict) else {}
+        raw_results = payload.get("results")
+        if isinstance(raw_results, list):
+            for it in raw_results:
                 if len(results) >= max_results:
-                    return
-                link = (link or "").strip()
-                if not _is_http_url(link):
-                    return
-                if link in seen:
-                    return
+                    break
+                if not isinstance(it, dict):
+                    continue
+
+                link = str(it.get("url") or "").strip()
+                if not _is_http_url(link) or link in seen:
+                    continue
                 seen.add(link)
 
-                title, snippet = _split_title_snippet(text)
-                title = title.strip() or link
-                snippet = (snippet or "").strip()
+                title = str(it.get("title") or "").strip() or link
+                snippet = str(it.get("content") or "").strip()
+                if len(snippet) > 240:
+                    snippet = snippet[:240].strip()
 
                 results.append({
                     "title": title,
@@ -100,97 +115,16 @@ async def web_search_ddg(query: str, max_results: int = 5) -> dict[str, Any]:
                     "snippet": snippet,
                 })
 
-            raw_results = payload.get("Results")
-            if isinstance(raw_results, list):
-                for it in raw_results:
-                    if len(results) >= max_results:
-                        break
-                    if not isinstance(it, dict):
-                        continue
-                    add_result(str(it.get("Text") or ""), str(it.get("FirstURL") or ""))
-
-            def walk_topics(v: Any) -> None:
-                if len(results) >= max_results:
-                    return
-                if not isinstance(v, list):
-                    return
-                for it in v:
-                    if len(results) >= max_results:
-                        return
-                    if not isinstance(it, dict):
-                        continue
-                    nested = it.get("Topics")
-                    if nested is not None:
-                        walk_topics(nested)
-                        continue
-                    add_result(str(it.get("Text") or ""), str(it.get("FirstURL") or ""))
-
-            walk_topics(payload.get("RelatedTopics"))
-
-            if results:
-                out: dict[str, Any] = {
-                    "query": q,
-                    "results": results,
-                    "source": "duckduckgo_api",
-                }
-                if warnings:
-                    out["warnings"] = warnings
-                return out
-        except Exception as exc:  # noqa: BLE001
-            # Include a short, actionable error message (DNS/TLS/timeout/etc.).
-            add_warning(f"duckduckgo api failed: {type(exc).__name__}: {exc}")
-
-        # ---- Provider 2: Wikipedia OpenSearch fallback ----
-        try:
-            resp = await client.get(
-                "https://en.wikipedia.org/w/api.php",
-                params={
-                    "action": "opensearch",
-                    "search": q,
-                    "limit": str(max_results),
-                    "namespace": "0",
-                    "format": "json",
-                },
-            )
-            resp.raise_for_status()
-            arr = resp.json()
-
-            if isinstance(arr, list) and len(arr) >= 4:
-                titles = arr[1] if isinstance(arr[1], list) else []
-                descriptions = arr[2] if isinstance(arr[2], list) else []
-                urls = arr[3] if isinstance(arr[3], list) else []
-
-                for i in range(min(len(titles), len(urls))):
-                    if len(results) >= max_results:
-                        break
-                    title = str(titles[i] or "").strip()
-                    link = str(urls[i] or "").strip()
-                    if not _is_http_url(link) or link in seen:
-                        continue
-                    seen.add(link)
-
-                    snippet = ""
-                    if i < len(descriptions):
-                        snippet = str(descriptions[i] or "").strip()
-                    if len(snippet) > 240:
-                        snippet = snippet[:240].strip()
-
-                    results.append({
-                        "title": title or link,
-                        "url": link,
-                        "snippet": snippet,
-                    })
-
-            out = {
-                "query": q,
-                "results": results,
-                "source": "wikipedia_opensearch" if results else "none",
-            }
-            if warnings:
-                out["warnings"] = warnings
-            return out
-        except Exception as exc:  # noqa: BLE001
-            add_warning(f"wikipedia fallback failed: {type(exc).__name__}: {exc}")
+        out: dict[str, Any] = {
+            "query": q,
+            "results": results,
+            "source": "tavily" if results else "none",
+        }
+        if warnings:
+            out["warnings"] = warnings
+        return out
+    except Exception as exc:  # noqa: BLE001
+        add_warning(f"tavily failed: {type(exc).__name__}: {exc}")
 
     out = {
         "query": q,
